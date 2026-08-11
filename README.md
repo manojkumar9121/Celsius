@@ -4,9 +4,9 @@ A sleek offline music player for Android that plays your local music library —
 
 ## Screenshots
 
-| Now Playing | Now Playing | Now Playing |
-| --- | --- | --- |
-| <img src="screenshots/screenshot-home.jpg" width="240" alt="Now Playing screen"> | <img src="screenshots/screenshot-player.jpg" width="240" alt="Now Playing screen"> | <img src="screenshots/screenshot-queue.jpg" width="240" alt="Now Playing screen"> |
+| Home | Playlists | Queue | Now Playing |
+| --- | --- | --- | --- |
+| <img src="screenshots/screenshot-home.jpg" width="240" alt="Home screen"> | <img src="screenshots/screenshot-playlist.jpg" width="240" alt="Playlists"> | <img src="screenshots/screenshot-queue.jpg" width="240" alt="Queue"> | <img src="screenshots/screenshot-player.jpg" width="240" alt="Now Playing screen"> |
 
 ## Features
 
