@@ -228,6 +228,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                     ),
                   )
                 : ReorderableListView.builder(
+                    padding: const EdgeInsets.only(bottom: 88),
                     itemCount: playlistSongs.length,
                     onReorder: (oldIndex, newIndex) async {
                       await HapticFeedback.lightImpact();

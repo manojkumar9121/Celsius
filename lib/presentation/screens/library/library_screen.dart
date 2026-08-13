@@ -541,6 +541,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
       );
     }
     return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 88),
       itemCount: playlists.length,
       itemBuilder: (context, index) {
         final playlist = playlists[index];
