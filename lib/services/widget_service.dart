@@ -8,15 +8,14 @@ class WidgetService {
   WidgetService._();
 
   static const _channel = MethodChannel('com.celsuis.celsuis/widget');
-  bool _initialized = false;
 
   Function()? onPrevious;
   Function()? onPlayPause;
   Function()? onNext;
 
   void init() {
-    if (_initialized) return;
-    _initialized = true;
+    // Remove any previous handler to avoid duplicates on re-init
+    _channel.setMethodCallHandler(null);
 
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -31,6 +30,11 @@ class WidgetService {
           break;
       }
     });
+  }
+
+  /// Call this when the audio handler is disposed to prevent stale method channel handlers.
+  void dispose() {
+    _channel.setMethodCallHandler(null);
   }
 
   Future<void> updateWidget({

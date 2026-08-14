@@ -1,5 +1,8 @@
 import 'package:flutter_audio_tagger/flutter_audio_tagger.dart';
 
+/// Maximum number of entries to keep in the lyrics cache before evicting the oldest.
+const int _kMaxLyricsCacheEntries = 100;
+
 class LyricsService {
   static final LyricsService _instance = LyricsService._();
   factory LyricsService() => _instance;
@@ -7,9 +10,13 @@ class LyricsService {
 
   final FlutterAudioTagger _tagger = FlutterAudioTagger();
   final Map<String, String?> _cache = {};
+  final List<String> _accessOrder = [];
 
   Future<String?> getLyrics(String filePath) async {
     if (_cache.containsKey(filePath)) {
+      // Move to end of access order (most recently used)
+      _accessOrder.remove(filePath);
+      _accessOrder.add(filePath);
       return _cache[filePath];
     }
 
@@ -17,10 +24,23 @@ class LyricsService {
       final tag = await _tagger.getAllTags(filePath);
       final lyrics = tag?.lyrics;
       _cache[filePath] = lyrics;
+      _accessOrder.add(filePath);
+      // Evict oldest entries if cache exceeds limit
+      _evictCacheIfNeeded();
       return lyrics;
     } catch (_) {
       _cache[filePath] = null;
+      _accessOrder.add(filePath);
+      _evictCacheIfNeeded();
       return null;
+    }
+  }
+
+  /// Removes the oldest cache entries until we're back under the limit.
+  void _evictCacheIfNeeded() {
+    while (_cache.length > _kMaxLyricsCacheEntries && _accessOrder.length > _kMaxLyricsCacheEntries) {
+      final oldest = _accessOrder.removeAt(0);
+      _cache.remove(oldest);
     }
   }
 
@@ -58,6 +78,7 @@ class LyricsService {
 
   void clearCache() {
     _cache.clear();
+    _accessOrder.clear();
   }
 }
 

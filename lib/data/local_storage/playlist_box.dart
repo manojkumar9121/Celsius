@@ -28,6 +28,14 @@ class PlaylistBox extends HiveObject {
   @HiveField(6)
   List<String> songIds = const [];
 
+  /// Automatically sets [coverArtPath] to the first song's artwork if not already set.
+  void autoSetCoverArt(String? firstSongCoverArtPath) {
+    if (coverArtPath == null || coverArtPath!.isEmpty) {
+      coverArtPath = firstSongCoverArtPath;
+      timestampUpdated = DateTime.now().millisecondsSinceEpoch;
+    }
+  }
+
   PlaylistEntity toEntity() {
     return PlaylistEntity(
       id: id,

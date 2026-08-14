@@ -1,8 +1,12 @@
+import 'dart:io';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:celsuis/data/local_storage/song_box.dart';
 import 'package:celsuis/data/local_storage/playlist_box.dart';
 import 'package:celsuis/data/local_storage/settings_box.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
+
+/// Current schema version for the songs box. Bump this when adding new Hive fields.
+const int _kCurrentSchemaVersion = 1;
 
 class HiveStorage {
   static const String _songsBoxName = 'songs';
@@ -27,12 +31,26 @@ class HiveStorage {
   static Future<void> _migrateHiveSchema() async {
     final songsBox = Hive.isBoxOpen(_songsBoxName) ? Hive.box<SongBox>(_songsBoxName) : null;
 
-    if (songsBox != null && songsBox.isNotEmpty) {
-      for (final key in songsBox.keys.toList()) {
-        final song = songsBox.get(key);
-        if (song != null && song.coverArtPath == null) {
-          await song.save();
-        }
+    if (songsBox == null || songsBox.isEmpty) return;
+
+    // Check if any song needs migration (has schemaVersion < current)
+    bool needsMigration = false;
+    for (final key in songsBox.keys.toList()) {
+      final song = songsBox.get(key);
+      if (song != null && song.schemaVersion < _kCurrentSchemaVersion) {
+        needsMigration = true;
+        break;
+      }
+    }
+    if (!needsMigration) return;
+
+    // Apply migration: update schemaVersion on all songs that need it
+    for (final key in songsBox.keys.toList()) {
+      final song = songsBox.get(key);
+      if (song == null) continue;
+      if (song.schemaVersion < _kCurrentSchemaVersion) {
+        song.schemaVersion = _kCurrentSchemaVersion;
+        await song.save();
       }
     }
   }
@@ -62,11 +80,33 @@ class HiveStorage {
   }
 
   static Future<void> deleteSong(String id) async {
+    final song = songsBox?.get(id);
     await songsBox?.delete(id);
+    // Clear waveform cache entry for the deleted song
+    if (song != null && song.filePath.isNotEmpty) {
+      _clearWaveformCacheEntry(song.filePath);
+    }
   }
 
   static Future<void> deleteSongs(List<String> ids) async {
-    await songsBox?.deleteAll(ids);
+    for (final id in ids) {
+      final song = songsBox?.get(id);
+      await songsBox?.delete(id);
+      if (song != null && song.filePath.isNotEmpty) {
+        _clearWaveformCacheEntry(song.filePath);
+      }
+    }
+  }
+
+  static void _clearWaveformCacheEntry(String filePath) {
+    try {
+      final cacheDir = '${filePath}_waveform_cache';
+      // Remove waveform cache file if it exists alongside the song
+      final cacheFile = File('$cacheDir.bin');
+      if (cacheFile.existsSync()) {
+        cacheFile.deleteSync();
+      }
+    } catch (_) {}
   }
 
   static Future<void> clearAllSongs() async {

@@ -221,26 +221,21 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> with SingleTickerProvid
   }
 
   Widget _buildAlbumArt(SongEntity song, ColorScheme colorScheme) {
+    final coverPath = song.coverArtPath;
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: SizedBox(
         width: 44,
         height: 44,
-        child: _hasArtwork(song)
+        child: coverPath != null && coverPath.isNotEmpty && File(coverPath).existsSync()
             ? Image.file(
-                File(song.coverArtPath!),
+                File(coverPath),
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => _placeholder(colorScheme),
               )
             : _placeholder(colorScheme),
       ),
     );
-  }
-
-  bool _hasArtwork(SongEntity song) {
-    return song.coverArtPath != null &&
-        song.coverArtPath!.isNotEmpty &&
-        File(song.coverArtPath!).existsSync();
   }
 
   Widget _placeholder(ColorScheme colorScheme) {

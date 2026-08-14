@@ -43,6 +43,10 @@ class SongBox extends HiveObject {
   @HiveField(11)
   String? realPath;
 
+  /// Schema version this song was written with. Used for migrations.
+  @HiveField(12)
+  int schemaVersion = 1;
+
   SongEntity toEntity() {
     return SongEntity(
       id: id,
@@ -74,6 +78,7 @@ class SongBox extends HiveObject {
     box.lastPlayedAt = entity.lastPlayedAt;
     box.playCount = entity.playCount;
     box.isFavorite = entity.isFavorite;
+    box.schemaVersion = 1;
     return box;
   }
 }

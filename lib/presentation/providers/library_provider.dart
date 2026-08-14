@@ -575,32 +575,45 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
   List<SongEntity> get filteredSongs {
     var songs = state.songs;
-    
+
     if (state.searchQuery.isNotEmpty) {
       final query = state.searchQuery.toLowerCase();
-      songs = songs.where((s) => s.title.toLowerCase().contains(query)).toList();
+      songs = songs.where((s) =>
+          s.title.toLowerCase().contains(query) ||
+          s.artist.toLowerCase().contains(query) ||
+          s.album.toLowerCase().contains(query)).toList();
     }
-    
+
     if (_selectedAlbum.isNotEmpty) {
       songs = songs.where((s) => s.album == _selectedAlbum).toList();
     }
-    
+
     if (_selectedArtist.isNotEmpty) {
       songs = songs.where((s) => s.artist == _selectedArtist).toList();
     }
-    
+
     return songs;
   }
 
   List<String> get albums {
-    final songs = state.searchQuery.isEmpty ? state.songs : state.songs.where((s) => s.title.toLowerCase().contains(state.searchQuery.toLowerCase())).toList();
-    final albumSet = songs.map((s) => s.album).toSet();
+    final querySongs = state.searchQuery.isEmpty
+        ? state.songs
+        : state.songs.where((s) =>
+            s.title.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
+            s.artist.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
+            s.album.toLowerCase().contains(state.searchQuery.toLowerCase())).toList();
+    final albumSet = querySongs.map((s) => s.album).toSet();
     return albumSet.toList()..sort();
   }
 
   List<String> get artists {
-    final songs = state.searchQuery.isEmpty ? state.songs : state.songs.where((s) => s.title.toLowerCase().contains(state.searchQuery.toLowerCase())).toList();
-    final artistSet = songs.map((s) => s.artist).toSet();
+    final querySongs = state.searchQuery.isEmpty
+        ? state.songs
+        : state.songs.where((s) =>
+            s.title.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
+            s.artist.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
+            s.album.toLowerCase().contains(state.searchQuery.toLowerCase())).toList();
+    final artistSet = querySongs.map((s) => s.artist).toSet();
     return artistSet.toList()..sort();
   }
 

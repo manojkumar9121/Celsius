@@ -57,12 +57,14 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) {
         _countdownTimer?.cancel();
+        _countdownTimer = null;
         return;
       }
       if (state.remaining > Duration.zero) {
         state = state.copyWith(remaining: state.remaining - const Duration(seconds: 1));
       } else {
         _countdownTimer?.cancel();
+        _countdownTimer = null;
       }
     });
 
@@ -153,7 +155,9 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   void dispose() {
     _clearEndOfTrack();
     _timer?.cancel();
+    _timer = null;
     _countdownTimer?.cancel();
+    _countdownTimer = null;
     super.dispose();
   }
 }

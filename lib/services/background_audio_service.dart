@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
+import 'package:celsuis/data/local_storage/hive_storage.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
 
 class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
@@ -16,6 +17,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   bool _wantPlaying = false;
   ConcatenatingAudioSource? _source;
   Duration _lastPosition = Duration.zero;
+  int _queueSetSeq = 0;
 
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<ProcessingState>? _processingStateSub;
@@ -149,11 +151,14 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   Future<void> setQueue(List<SongEntity> songs, {SongEntity? initialSong}) async {
+    // Bump the generation counter so any in-flight setQueue() knows it is stale.
+    final seq = ++_queueSetSeq;
+
     if (songs.isEmpty) {
       _queue = [];
       _currentIndex = 0;
       queue.add(const []);
-      player.stop();
+      await player.stop();
       playbackState.add(playbackState.value.copyWith(
         playing: false,
         processingState: AudioProcessingState.idle,
@@ -169,7 +174,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     }
     _orderedQueue = List.of(songs);
     await _buildSource();
-    
+
     var startIndex = 0;
     if (initialSong != null) {
       startIndex = _queue.indexWhere((s) => s.id == initialSong.id);
@@ -179,12 +184,15 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     queue.add(_queue.map(_songToMediaItem).toList());
 
     if (_source == null) return;
-    
+
     _wantPlaying = true;
     await player.setAudioSource(_source!, initialIndex: startIndex, initialPosition: Duration.zero);
-    
+
     await Future.delayed(const Duration(milliseconds: 50));
-    
+
+    // A newer setQueue() started while we were loading — let it handle playback.
+    if (seq != _queueSetSeq) return;
+
     if (_wantPlaying) {
       await player.play();
     }
@@ -203,14 +211,24 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Future<void> _playAt(int index) async {
     if (index < 0 || index >= _queue.length) return;
 
-    final wasPlaying = player.playing;
-    if (wasPlaying) await player.pause();
-    
     _currentIndex = index;
     final song = _queue[index];
     final mediaItem = _songToMediaItem(song);
     _lastMediaItem = mediaItem;
     this.mediaItem.add(mediaItem);
+
+    // If the source is already loaded, jump to the item in place with
+    // player.seek() — no pause, no source teardown, no audible gap.
+    if (player.processingState != ProcessingState.idle && _source != null) {
+      await player.seek(Duration.zero, index: index);
+      if (_wantPlaying) {
+        await player.play();
+      }
+      return;
+    }
+
+    final wasPlaying = player.playing;
+    if (wasPlaying) await player.pause();
 
     try {
       await _loadSource(initialIndex: index, initialPosition: Duration.zero);
@@ -342,6 +360,16 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   Future<void> _finishQueue() async {
+    // Track play count for the song that just finished
+    if (_currentIndex >= 0 && _currentIndex < _queue.length) {
+      final finishedSong = _queue[_currentIndex];
+      try {
+        await HiveStorage.incrementPlayCount(finishedSong.id);
+      } catch (e) {
+        debugPrint('Failed to increment play count for ${finishedSong.id}: $e');
+      }
+    }
+
     playbackState.add(playbackState.value.copyWith(
       playing: false,
       processingState: AudioProcessingState.completed,
@@ -416,10 +444,27 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   Future<void> _rebuildSourceKeepingPlayback(bool wasPlaying, Duration position) async {
-    await _buildSource();
-    if (_source == null) return;
+    if (_source == null || _queue.isEmpty) return;
     if (player.processingState == ProcessingState.idle) return;
 
+    // Prefer a gapless in-place reorder of the already-loaded source so
+    // playback isn't interrupted. Falls back to a full reload on any mismatch.
+    try {
+      final src = _source!;
+      if (src.children.length == _queue.length) {
+        await _reorderSourceInPlace(_queue);
+        if (wasPlaying) {
+          await player.play();
+        }
+        return;
+      }
+    } catch (e) {
+      debugPrint('In-place source reorder failed, falling back to reload: $e');
+    }
+
+    // Fallback: rebuild the source from the current queue order and reload.
+    await _buildSource();
+    if (_source == null) return;
     await player.setAudioSource(
       _source!,
       initialIndex: _currentIndex,
@@ -427,6 +472,34 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     );
     if (wasPlaying) {
       await player.play();
+    }
+  }
+
+  /// Reorders the loaded [ConcatenatingAudioSource] to match [newOrder]
+  /// without stopping playback. Moves are applied from the end backwards so
+  /// an earlier move never disturbs items that have already been placed.
+  Future<void> _reorderSourceInPlace(List<SongEntity> newOrder) async {
+    final src = _source;
+    if (src == null) return;
+
+    final currentIds = src.children.map((c) {
+      if (c is IndexedAudioSource) {
+        final t = c.tag;
+        return t is SongEntity ? t.id : null;
+      }
+      return null;
+    }).toList();
+    final targetIds = [for (final s in newOrder) s.id];
+    if (currentIds.length != targetIds.length) return;
+
+    for (int i = targetIds.length - 1; i >= 0; i--) {
+      final targetId = targetIds[i];
+      final cur = currentIds.indexOf(targetId);
+      if (cur < 0) return; // order mismatch — let the caller fall back
+      if (cur == i) continue;
+      await src.move(cur, i);
+      currentIds.removeAt(cur);
+      currentIds.insert(i, targetId);
     }
   }
 
@@ -474,13 +547,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       if (candidate.startsWith('content://') ||
           candidate.startsWith('http://') ||
           candidate.startsWith('https://')) {
-        return AudioSource.uri(Uri.parse(candidate));
+        return AudioSource.uri(Uri.parse(candidate), tag: song);
       }
       if (File(candidate).existsSync()) {
-        return AudioSource.file(candidate);
+        return AudioSource.file(candidate, tag: song);
       }
     }
-    return AudioSource.file(song.filePath);
+    return AudioSource.file(song.filePath, tag: song);
   }
 
   AudioProcessingState _mapProcessingState(ProcessingState state) {

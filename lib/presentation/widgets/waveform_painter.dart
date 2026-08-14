@@ -32,9 +32,21 @@ class WaveformPainter extends CustomPainter {
     this.animation,
   }) : super(repaint: animation);
 
+  /// Maximum amplitude modulation applied by the pulse animation.
+  static const double _kPulseAmplitude = 0.15;
+
+  /// Number of full wave cycles in the pulse animation per second.
+  static const int _kPulseFreqCyclesPerTimeUnit = 2;
+
+  /// Number of spatial wave cycles across the bar array for the pulse phase offset.
+  static const int _kPulseSpatialCycles = 4;
+
   double _pulseFactor(int index, int barCount, double t) {
     if (t <= 0 || barCount <= 0) return 1.0;
-    return 1.0 + 0.15 * sin(2 * pi * t * 2 + (index / barCount) * pi * 4);
+    return 1.0 +
+        _kPulseAmplitude *
+            sin(2 * pi * t * _kPulseFreqCyclesPerTimeUnit +
+                (index / barCount) * pi * _kPulseSpatialCycles);
   }
 
   Color _barColor(int index, int barCount, bool isActive, double amplitude) {
