@@ -98,6 +98,17 @@ class WaveformExtractorService {
     }
   }
 
+  /// Removes the cached waveform for [audioPath], if any. Used when a song
+  /// is deleted from the library so stale entries don't accumulate.
+  Future<void> removeFromCache(String audioPath) async {
+    try {
+      final box = _cacheBox ?? await Hive.openBox<String>(_boxName);
+      await box.delete(audioPath);
+    } catch (e) {
+      debugPrint('Failed to clear waveform cache for $audioPath: $e');
+    }
+  }
+
   void dispose() {
     _cacheBox?.close();
   }

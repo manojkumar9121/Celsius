@@ -44,7 +44,10 @@ class SongBox extends HiveObject {
   String? realPath;
 
   /// Schema version this song was written with. Used for migrations.
-  @HiveField(12)
+  ///
+  /// `defaultValue: 0` keeps rows written by builds before field 12 existed
+  /// readable — a missing field decodes to 0 (pre-schema) instead of crashing.
+  @HiveField(12, defaultValue: 0)
   int schemaVersion = 1;
 
   SongEntity toEntity() {

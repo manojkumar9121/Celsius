@@ -1,9 +1,9 @@
-import 'dart:io';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:celsuis/data/local_storage/song_box.dart';
 import 'package:celsuis/data/local_storage/playlist_box.dart';
 import 'package:celsuis/data/local_storage/settings_box.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
+import 'package:celsuis/services/waveform_extractor_service.dart';
 
 /// Current schema version for the songs box. Bump this when adding new Hive fields.
 const int _kCurrentSchemaVersion = 1;
@@ -17,9 +17,18 @@ class HiveStorage {
   static bool get isInitialized => _initialized;
 
   static Future<void> init() async {
-    Hive.registerAdapter(SongBoxAdapter());
-    Hive.registerAdapter(PlaylistBoxAdapter());
-    Hive.registerAdapter(SettingsBoxAdapter());
+    // Hive keeps the adapter registry across Hive.close(), so a retry
+    // (HiveErrorScreen -> Hive.close() -> init()) must not re-register —
+    // re-registering a typeId throws "already a type adapter".
+    if (!Hive.isAdapterRegistered(SongBoxAdapter().typeId)) {
+      Hive.registerAdapter(SongBoxAdapter());
+    }
+    if (!Hive.isAdapterRegistered(PlaylistBoxAdapter().typeId)) {
+      Hive.registerAdapter(PlaylistBoxAdapter());
+    }
+    if (!Hive.isAdapterRegistered(SettingsBoxAdapter().typeId)) {
+      Hive.registerAdapter(SettingsBoxAdapter());
+    }
     await Hive.openBox<SongBox>(_songsBoxName);
     await Hive.openBox<PlaylistBox>(_playlistsBoxName);
     await Hive.openBox<SettingsBox>(_settingsBoxName);
@@ -82,9 +91,9 @@ class HiveStorage {
   static Future<void> deleteSong(String id) async {
     final song = songsBox?.get(id);
     await songsBox?.delete(id);
-    // Clear waveform cache entry for the deleted song
+    // Clear the waveform cache entry (a Hive box keyed by audio path).
     if (song != null && song.filePath.isNotEmpty) {
-      _clearWaveformCacheEntry(song.filePath);
+      await WaveformExtractorService.instance.removeFromCache(song.filePath);
     }
   }
 
@@ -93,20 +102,9 @@ class HiveStorage {
       final song = songsBox?.get(id);
       await songsBox?.delete(id);
       if (song != null && song.filePath.isNotEmpty) {
-        _clearWaveformCacheEntry(song.filePath);
+        await WaveformExtractorService.instance.removeFromCache(song.filePath);
       }
     }
-  }
-
-  static void _clearWaveformCacheEntry(String filePath) {
-    try {
-      final cacheDir = '${filePath}_waveform_cache';
-      // Remove waveform cache file if it exists alongside the song
-      final cacheFile = File('$cacheDir.bin');
-      if (cacheFile.existsSync()) {
-        cacheFile.deleteSync();
-      }
-    } catch (_) {}
   }
 
   static Future<void> clearAllSongs() async {

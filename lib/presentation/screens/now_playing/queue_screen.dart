@@ -61,7 +61,7 @@ class _QueueList extends ConsumerWidget {
     return ReorderableListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 8),
       itemCount: queue.length,
-      onReorder: (oldIndex, newIndex) {
+      onReorderItem: (oldIndex, newIndex) {
         ref.read(audioPlayerProvider.notifier).reorderQueue(oldIndex, newIndex);
       },
       itemBuilder: (context, index) {
@@ -126,7 +126,7 @@ class _QueueArt extends StatelessWidget {
           ? Image.file(
               File(song.coverArtPath!),
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => _Placeholder(),
+              errorBuilder: (_, _, _) => _Placeholder(),
             )
           : _Placeholder(),
     );

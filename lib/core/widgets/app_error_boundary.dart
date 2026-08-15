@@ -5,8 +5,15 @@ import 'package:celsuis/data/local_storage/hive_storage.dart';
 import 'package:celsuis/app.dart';
 
 bool _hiveInitSuccess = false;
+String _hiveErrorText = 'Local storage failed to initialize.';
 
 void markHiveInitSuccess() => _hiveInitSuccess = true;
+
+/// Records the real initialization failure so the error screen shows the
+/// actual cause instead of a generic message.
+void reportHiveInitError(Object error) {
+  _hiveErrorText = 'Local storage failed to initialize.\n\n$error';
+}
 
 class HiveErrorScreen extends StatelessWidget {
   final String error;
@@ -93,7 +100,13 @@ class AppRoot extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!_hiveInitSuccess) {
-      return const HiveErrorScreen(error: 'Local storage failed to initialize.');
+      // HiveErrorScreen uses Scaffold/Text/FilledButton and needs a
+      // MaterialApp ancestor for Directionality, themes and the Navigator
+      // used by the retry flow.
+      return MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: HiveErrorScreen(error: _hiveErrorText),
+      );
     }
     return child;
   }

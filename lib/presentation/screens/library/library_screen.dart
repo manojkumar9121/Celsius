@@ -183,6 +183,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
           ? FloatingActionButton(
               onPressed: () async {
                 await HapticFeedback.lightImpact();
+                if (!context.mounted) return;
                 await showCreatePlaylistDialog(context, ref);
               },
               child: const Icon(Icons.add),
@@ -290,6 +291,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
           onTap: () async {
             await HapticFeedback.lightImpact();
             ref.read(audioPlayerProvider.notifier).playSong(song, songs);
+            if (!context.mounted) return;
             context.push('/now-playing');
           },
         );
@@ -335,6 +337,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
               onTap: () async {
                 await HapticFeedback.lightImpact();
                 ref.read(audioPlayerProvider.notifier).playSong(song, songs);
+                if (!context.mounted) return;
                 context.push('/now-playing');
               },
             );
@@ -362,6 +365,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
           onTap: () async {
             await HapticFeedback.lightImpact();
             ref.read(audioPlayerProvider.notifier).playSong(songs.first, songs);
+            if (!context.mounted) return;
             context.push('/now-playing');
           },
           child: Column(
@@ -439,6 +443,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
               onTap: () async {
                 await HapticFeedback.lightImpact();
                 ref.read(audioPlayerProvider.notifier).playSong(song, songs);
+                if (!context.mounted) return;
                 context.push('/now-playing');
               },
             );
@@ -466,6 +471,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
           onTap: () async {
             await HapticFeedback.lightImpact();
             ref.read(audioPlayerProvider.notifier).playSong(songs.first, songs);
+            if (!context.mounted) return;
             context.push('/now-playing');
           },
           child: Column(
@@ -531,6 +537,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
             FilledButton.icon(
               onPressed: () async {
                 await HapticFeedback.mediumImpact();
+                if (!mounted) return;
                 await showCreatePlaylistDialog(context, ref);
               },
               icon: const Icon(Icons.add),

@@ -28,25 +28,15 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
-  bool hiveOk = false;
   try {
     await Hive.initFlutter();
     await HiveStorage.init();
     await WaveformExtractorService.instance.init();
-    hiveOk = true;
     markHiveInitSuccess();
   } catch (e) {
+    // AppRoot renders the HiveErrorScreen when initialization fails.
     debugPrint('Hive init error: $e');
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!hiveOk) {
-        runApp(
-          UncontrolledProviderScope(
-            container: appContainer,
-            child: HiveErrorScreen(error: e.toString()),
-          ),
-        );
-      }
-    });
+    reportHiveInitError(e);
   }
 
   try {

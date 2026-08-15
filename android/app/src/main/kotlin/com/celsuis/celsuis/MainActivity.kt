@@ -219,7 +219,9 @@ class MainActivity : AudioServiceActivity() {
                             "title" to title,
                             "artist" to artist,
                             "album" to album,
-                            "duration" to (duration / 1000),
+                            // MediaStore.DURATION is already in milliseconds;
+                            // the Dart side stores durationMs as-is.
+                            "duration" to duration,
                             "size" to size,
                             "uri" to contentUri
                         )

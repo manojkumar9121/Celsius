@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -252,7 +251,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             child: Image.file(
               File(song.coverArtPath!),
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(color: avgColor),
+              errorBuilder: (_, _, _) => Container(color: avgColor),
             ),
           )
         else
@@ -286,6 +285,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             icon: Icon(Icons.keyboard_arrow_down, color: textColor, size: 28),
             onPressed: () async {
               await HapticFeedback.lightImpact();
+              if (!context.mounted) return;
               Navigator.pop(context);
             },
           ),
@@ -347,7 +347,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
                   ? Image.file(
                       File(song.coverArtPath!),
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _artPlaceholder(artSize, song),
+                      errorBuilder: (_, _, _) => _artPlaceholder(artSize, song),
                     )
                   : _artPlaceholder(artSize, song),
             ),
@@ -417,6 +417,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             label: 'Save',
             onTap: () async {
               await HapticFeedback.lightImpact();
+              if (!mounted) return;
               context.push('/playlist');
             },
           ),
@@ -472,7 +473,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Column(
         children: [
-          Container(
+          SizedBox(
             height: 32,
             child: SliderTheme(
               data: SliderThemeData(
@@ -745,7 +746,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
                 style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
-              const Text('Music will stop at the end of current song'),
+              Text(
+                sleepTimer.selectedDuration == null
+                    ? 'Music will stop at the end of current song'
+                    : 'Music will stop when the timer ends',
+              ),
             ],
           ),
           actions: [
@@ -803,11 +808,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             ),
           );
         } else {
-          ref.read(sleepTimerProvider.notifier).startEndOfTrackTimer();
+          final armed = ref.read(sleepTimerProvider.notifier).startEndOfTrackTimer();
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Sleep timer set for end of track'),
-              duration: Duration(seconds: 2),
+            SnackBar(
+              content: Text(armed
+                  ? 'Sleep timer set for end of track'
+                  : 'Player not ready — try again in a moment'),
+              duration: const Duration(seconds: 2),
             ),
           );
         }

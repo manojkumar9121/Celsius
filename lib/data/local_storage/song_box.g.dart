@@ -28,13 +28,14 @@ class SongBoxAdapter extends TypeAdapter<SongBox> {
       ..playCount = fields[8] as int
       ..isFavorite = fields[9] as bool
       ..coverArtPath = fields[10] as String?
-      ..realPath = fields[11] as String?;
+      ..realPath = fields[11] as String?
+      ..schemaVersion = fields[12] == null ? 0 : fields[12] as int;
   }
 
   @override
   void write(BinaryWriter writer, SongBox obj) {
     writer
-      ..writeByte(12)
+      ..writeByte(13)
       ..writeByte(0)
       ..write(obj.id)
       ..writeByte(1)
@@ -58,7 +59,9 @@ class SongBoxAdapter extends TypeAdapter<SongBox> {
       ..writeByte(10)
       ..write(obj.coverArtPath)
       ..writeByte(11)
-      ..write(obj.realPath);
+      ..write(obj.realPath)
+      ..writeByte(12)
+      ..write(obj.schemaVersion);
   }
 
   @override

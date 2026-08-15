@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -14,6 +13,12 @@ import 'package:celsuis/domain/entities/song_entity.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 const _channel = MethodChannel('com.celsuis.celsuis/audio_scanner');
+
+/// Durations below this value are suspicious: older builds persisted
+/// MediaStore durations in seconds (e.g. 240 for a 4-minute song) instead
+/// of milliseconds. Songs with a shorter-than-10s duration are re-measured
+/// during scans to repair the corrupted rows.
+const int _kSuspiciousDurationMs = 10000;
 
 final libraryProvider = StateNotifierProvider<LibraryNotifier, LibraryState>((ref) {
   return LibraryNotifier();
@@ -164,7 +169,9 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
           songs: allSongs.map((box) => box.toEntity()).toList(),
           isScanning: false,
           scanningProgress: 1.0,
-          scannedFolders: [...state.scannedFolders, folderPath],
+          scannedFolders: state.scannedFolders.contains(folderPath)
+              ? state.scannedFolders
+              : [...state.scannedFolders, folderPath],
         );
       }
     } catch (e) {
@@ -297,6 +304,25 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
         );
         if (song != null) {
           await HiveStorage.addSong(song);
+        }
+      } else if (existingBox.durationMs > 0 &&
+          existingBox.durationMs < _kSuspiciousDurationMs) {
+        // Legacy bug: durations were persisted in seconds instead of
+        // milliseconds. Re-derive the correct duration for affected songs.
+        int corrected = int.tryParse(fileInfo['duration'] ?? '') ?? 0;
+        if (corrected == 0) {
+          final song = await _extractMetadata(
+            filePath,
+            realPath: fileInfo['realPath'],
+            preTitle: fileInfo['title'],
+            preArtist: fileInfo['artist'],
+            preAlbum: fileInfo['album'],
+          );
+          corrected = song?.durationMs ?? 0;
+        }
+        if (corrected > 0 && corrected != existingBox.durationMs) {
+          existingBox.durationMs = corrected;
+          await existingBox.save();
         }
       }
       processed++;
@@ -446,7 +472,7 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
           final result = await _channel.invokeMethod<Uint8List>('extractArtwork', {'path': filePath});
           artwork = result;
         } catch (e) {
-          print('Native artwork extraction failed for $filePath: $e');
+          debugPrint('Native artwork extraction failed for $filePath: $e');
         }
       }
 
@@ -463,7 +489,7 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
           final result = await _channel.invokeMethod<Uint8List>('extractArtwork', {'path': filePath});
           artwork = result;
         } catch (e) {
-          print('Fallback native artwork extraction failed for $filePath: $e');
+          debugPrint('Fallback native artwork extraction failed for $filePath: $e');
         }
       }
 

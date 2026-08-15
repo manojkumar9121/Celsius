@@ -114,8 +114,11 @@ class MainScaffold extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     int currentIndex = 0;
-    if (location == '/library') currentIndex = 1;
-    else if (location == '/settings') currentIndex = 2;
+    if (location == '/library') {
+      currentIndex = 1;
+    } else if (location == '/settings') {
+      currentIndex = 2;
+    }
 
     final navBar = NavigationBar(
       selectedIndex: currentIndex,

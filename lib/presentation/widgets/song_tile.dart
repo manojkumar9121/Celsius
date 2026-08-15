@@ -38,6 +38,7 @@ class SongTile extends ConsumerWidget {
       ),
       confirmDismiss: (direction) async {
         await HapticFeedback.mediumImpact();
+        if (!context.mounted) return false;
         return await _showDeleteDialog(context);
       },
       onDismissed: (direction) {
@@ -88,6 +89,7 @@ class SongTile extends ConsumerWidget {
       },
       onLongPress: () async {
         await HapticFeedback.mediumImpact();
+        if (!context.mounted) return;
         _showSongOptions(context, ref, song);
       },
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 2),

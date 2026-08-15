@@ -75,32 +75,6 @@ class SettingsScreen extends ConsumerWidget {
           ),
           _buildSection(
             context,
-            'Playback',
-            [
-              SwitchListTile(
-                title: const Text('Crossfade'),
-                subtitle: Text('${settings.crossfadeDurationMs}ms'),
-                value: settings.crossfadeEnabled,
-                onChanged: (value) => notifier.toggleCrossfade(value),
-              ),
-              if (settings.crossfadeEnabled)
-                Slider(
-                  value: settings.crossfadeDurationMs.toDouble(),
-                  onChanged: (value) => notifier.setCrossfadeDuration(value.toInt()),
-                  min: 0,
-                  max: 12000,
-                  divisions: 24,
-                  label: '${(settings.crossfadeDurationMs / 1000).toStringAsFixed(1)}s',
-                ),
-              SwitchListTile(
-                title: const Text('Gapless Playback'),
-                value: settings.gaplessPlayback,
-                onChanged: (value) => notifier.toggleGaplessPlayback(value),
-              ),
-            ],
-          ),
-          _buildSection(
-            context,
             'Visualization',
             [
               ListTile(
@@ -173,12 +147,6 @@ class SettingsScreen extends ConsumerWidget {
             context,
             'Notifications',
             [
-              SwitchListTile(
-                title: const Text('Media Notification'),
-                subtitle: const Text('Show playback controls on lock screen'),
-                value: settings.showMediaNotification,
-                onChanged: (value) => notifier.toggleMediaNotification(value),
-              ),
               SwitchListTile(
                 title: const Text('Ongoing Notification'),
                 subtitle: const Text('Keep notification visible while playing'),
@@ -633,16 +601,20 @@ class WaveformStylePicker extends StatelessWidget {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Waveform Style'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: WaveformStyle.values.map((style) {
-          return RadioListTile<WaveformStyle>(
-            title: Text(style.name),
-            value: style,
-            groupValue: initialStyle,
-            onChanged: (value) => Navigator.pop(context, value),
-          );
-        }).toList(),
+      content: RadioGroup<WaveformStyle>(
+        groupValue: initialStyle,
+        onChanged: (value) {
+          if (value != null) Navigator.pop(context, value);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: WaveformStyle.values.map((style) {
+            return RadioListTile<WaveformStyle>(
+              title: Text(style.name),
+              value: style,
+            );
+          }).toList(),
+        ),
       ),
     );
   }

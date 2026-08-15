@@ -75,19 +75,26 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
     );
   }
 
-  void startEndOfTrackTimer() {
+  /// Returns true when the end-of-track timer is armed, false when the audio
+  /// handler is not available yet (nothing to listen to).
+  bool startEndOfTrackTimer() {
     cancelTimer();
     _endOfTrack = true;
-    _attachEndOfTrackListeners();
+    final attached = _attachEndOfTrackListeners();
+    if (!attached) {
+      _endOfTrack = false;
+      return false;
+    }
     state = const SleepTimerState(
       isActive: true,
       selectedDuration: null,
     );
+    return true;
   }
 
-  void _attachEndOfTrackListeners() {
+  bool _attachEndOfTrackListeners() {
     final handler = ref.read(audioHandlerProvider);
-    if (handler == null) return;
+    if (handler == null) return false;
 
     _discontinuitySub = handler.player.positionDiscontinuityStream.listen((discontinuity) {
       if (!_endOfTrack) return;
@@ -101,6 +108,7 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
         _finishEndOfTrack();
       }
     });
+    return true;
   }
 
   void _finishEndOfTrack() {

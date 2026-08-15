@@ -26,6 +26,10 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<MediaItem?>? _mediaItemSub;
   bool _widgetCallbacksSet = false;
+  /// Song/queue requested while the audio handler was still initializing.
+  /// Applied as soon as the handler becomes available.
+  SongEntity? _pendingSong;
+  List<SongEntity>? _pendingQueue;
 
   AudioPlayerNotifier() : super(const AudioPlayerState()) {
     WidgetsBinding.instance.addObserver(this);
@@ -82,6 +86,34 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
         debugPrint('Media item update error: $e');
       }
     }, onError: (e) => debugPrint('Media item stream error: $e'));
+
+    _applyDefaultPlaybackSettings(handler);
+
+    // A song was requested while the handler was still initializing — start it now.
+    final pendingSong = _pendingSong;
+    final pendingQueue = _pendingQueue;
+    if (pendingSong != null) {
+      _pendingSong = null;
+      _pendingQueue = null;
+      unawaited(playSong(pendingSong, pendingQueue));
+    }
+  }
+
+  void _applyDefaultPlaybackSettings(AudioPlayerHandler handler) {
+    final settings = HiveStorage.getSettings();
+    if (settings.defaultShuffle) {
+      unawaited(handler.setShuffle(true));
+      state = state.copyWith(isShuffled: true);
+    }
+    if (settings.defaultRepeatMode != AppSettingsRepeatMode.off) {
+      final audioServiceMode = switch (settings.defaultRepeatMode) {
+        AppSettingsRepeatMode.one => AudioServiceRepeatMode.one,
+        AppSettingsRepeatMode.all => AudioServiceRepeatMode.all,
+        AppSettingsRepeatMode.off => AudioServiceRepeatMode.none,
+      };
+      unawaited(handler.setRepeatMode(audioServiceMode));
+      state = state.copyWith(repeatMode: settings.defaultRepeatMode);
+    }
   }
 
   Future<void> playSong(SongEntity song, List<SongEntity>? queue) async {
@@ -95,7 +127,15 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     );
 
     final handler = _handler;
-    if (handler == null) return;
+    if (handler == null) {
+      // Audio stack still initializing — remember the intent and start
+      // playback once the handler is available.
+      _pendingSong = song;
+      _pendingQueue = resolvedQueue;
+      return;
+    }
+    _pendingSong = null;
+    _pendingQueue = null;
     try {
       await handler.setQueue(resolvedQueue, initialSong: song);
     } catch (e) {
@@ -115,14 +155,20 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
 
     _widgetService.trackSong(song);
     _widgetService.onSongChanged(song, true);
-    unawaited(HiveStorage.incrementPlayCount(song.id));
+    // Play count is recorded by the audio handler when the song becomes
+    // current (see background_audio_service.dart) — one increment per play,
+    // regardless of how the song was started.
   }
 
   Future<void> togglePlayPause() async {
     final handler = _handler;
     if (handler == null) return;
     if (handler.isPlaying) {
-      await handler.pause();
+      if (HiveStorage.getSettings().stopOnPause) {
+        await handler.stop();
+      } else {
+        await handler.pause();
+      }
       state = state.copyWith(isPlaying: false);
       _widgetService.onPlayStateChanged(false);
     } else {
@@ -143,7 +189,11 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   void pause() {
     final handler = _handler;
     if (handler == null) return;
-    handler.pause();
+    if (HiveStorage.getSettings().stopOnPause) {
+      handler.stop();
+    } else {
+      handler.pause();
+    }
     state = state.copyWith(isPlaying: false);
     _widgetService.onPlayStateChanged(false);
   }
@@ -181,11 +231,16 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     state = state.copyWith(volume: volume);
   }
 
-  void setShuffle(bool enabled) {
+  Future<void> setShuffle(bool enabled) async {
     final handler = _handler;
     if (handler == null) return;
-    handler.setShuffle(enabled);
-    state = state.copyWith(isShuffled: enabled);
+    await handler.setShuffle(enabled);
+    // Re-sync the UI queue with the (possibly reordered) handler queue so
+    // skipToQueueItem/reorderQueue indices always agree.
+    state = state.copyWith(
+      isShuffled: enabled,
+      queue: List.of(handler.songs),
+    );
   }
 
   void setRepeatMode(AppSettingsRepeatMode mode) {
@@ -216,6 +271,8 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   }
 
   void reorderQueue(int oldIndex, int newIndex) {
+    // oldIndex/newIndex arrive pre-adjusted (onReorderItem semantics): the
+    // item was already removed from the list before newIndex was computed.
     if (oldIndex < 0 || oldIndex >= state.queue.length) return;
     final handler = _handler;
     if (handler != null) {
@@ -223,8 +280,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
         debugPrint('Queue reorder failed: $e');
       }));
     }
-    if (newIndex > oldIndex) newIndex -= 1;
-    if (newIndex < 0 || newIndex >= state.queue.length) return;
+    if (newIndex < 0 || newIndex > state.queue.length) return;
 
     final songs = List<SongEntity>.from(state.queue);
     final song = songs.removeAt(oldIndex);

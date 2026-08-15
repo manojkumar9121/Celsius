@@ -18,6 +18,10 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   ConcatenatingAudioSource? _source;
   Duration _lastPosition = Duration.zero;
   int _queueSetSeq = 0;
+  /// Index of the last song whose play count was recorded. Guards against
+  /// double counting when the same index is re-emitted (e.g. after a
+  /// shuffle/reorder rebuild that keeps the current song).
+  int _countedIndex = -1;
 
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<ProcessingState>? _processingStateSub;
@@ -81,6 +85,14 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         final song = _queue[index];
         _lastMediaItem = _songToMediaItem(song).copyWith(duration: player.duration);
         mediaItem.add(_lastMediaItem!);
+        // Count each play once, when the song becomes current (covers
+        // initial play, manual skips and auto-advance alike).
+        if (index != _countedIndex) {
+          _countedIndex = index;
+          unawaited(HiveStorage.incrementPlayCount(song.id).catchError((Object e) {
+            debugPrint('Failed to increment play count for ${song.id}: $e');
+          }));
+        }
         playbackState.add(playbackState.value.copyWith(
           queueIndex: index,
           systemActions: {MediaAction.seek},
@@ -173,6 +185,9 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       _queue.shuffle();
     }
     _orderedQueue = List.of(songs);
+    // A new queue invalidates the play-count guard: the first song of this
+    // queue must be counted even if it lands on the previously counted index.
+    _countedIndex = -1;
     await _buildSource();
 
     var startIndex = 0;
@@ -322,15 +337,15 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   Future<void> skipToNext() async {
     if (_queue.isEmpty) return;
 
-    if (_isShuffled) {
-      final next = _currentIndex + 1 >= _queue.length ? 0 : _currentIndex + 1;
-      await _playAt(next);
-      return;
-    }
-
     final next = _currentIndex + 1;
     if (next >= _queue.length) {
-      await _finishQueue();
+      // At the end of the queue: wrap around when repeat is on, otherwise
+      // finish the queue (playback stops; the user can press play to restart).
+      if (_repeatMode != AudioServiceRepeatMode.none) {
+        await _playAt(0);
+      } else {
+        await _finishQueue();
+      }
       return;
     }
     await _playAt(next);
@@ -360,16 +375,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   Future<void> _finishQueue() async {
-    // Track play count for the song that just finished
-    if (_currentIndex >= 0 && _currentIndex < _queue.length) {
-      final finishedSong = _queue[_currentIndex];
-      try {
-        await HiveStorage.incrementPlayCount(finishedSong.id);
-      } catch (e) {
-        debugPrint('Failed to increment play count for ${finishedSong.id}: $e');
-      }
+    // Make the actual player state match the emitted "completed" state.
+    // Natural queue end already has the player stopped; a manual next-at-end
+    // would otherwise keep audio playing behind a "stopped" notification.
+    _wantPlaying = false;
+    if (player.playing) {
+      await player.pause();
     }
-
     playbackState.add(playbackState.value.copyWith(
       playing: false,
       processingState: AudioProcessingState.completed,
@@ -414,12 +426,14 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     if (_currentIndex < 0) _currentIndex = 0;
 
     await _rebuildSourceKeepingPlayback(wasPlaying, currentPosition);
+    // Re-emit the queue so the system UI (and any queue listeners) see the
+    // new order even when the current song did not change.
+    queue.add(_queue.map(_songToMediaItem).toList());
     _notifyShuffleMode();
   }
 
   Future<void> reorderQueue(int oldIndex, int newIndex) async {
     if (oldIndex < 0 || oldIndex >= _queue.length) return;
-    if (newIndex > oldIndex) newIndex -= 1;
     if (newIndex < 0 || newIndex >= _queue.length) return;
 
     final wasPlaying = player.playing;

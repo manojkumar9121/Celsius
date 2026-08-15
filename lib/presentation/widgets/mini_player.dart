@@ -52,12 +52,17 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> with SingleTickerProvid
           ? null
           : () async {
               await HapticFeedback.lightImpact();
+              if (!context.mounted) return;
               context.push('/now-playing');
             },
       onVerticalDragStart: _showVolume
           ? null
           : (details) {
-              setState(() => _showVolume = true);
+              setState(() {
+                // Pick up the current volume instead of resetting to 1.0.
+                _volume = ref.read(audioPlayerProvider).volume;
+                _showVolume = true;
+              });
             },
       onVerticalDragEnd: _showVolume
           ? (details) {
@@ -231,7 +236,7 @@ class _MiniPlayerState extends ConsumerState<MiniPlayer> with SingleTickerProvid
             ? Image.file(
                 File(coverPath),
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => _placeholder(colorScheme),
+                errorBuilder: (_, _, _) => _placeholder(colorScheme),
               )
             : _placeholder(colorScheme),
       ),

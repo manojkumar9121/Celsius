@@ -230,13 +230,22 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                 : ReorderableListView.builder(
                     padding: const EdgeInsets.only(bottom: 88),
                     itemCount: playlistSongs.length,
-                    onReorder: (oldIndex, newIndex) async {
+                    onReorderItem: (oldIndex, newIndex) async {
                       await HapticFeedback.lightImpact();
-                      if (newIndex > oldIndex) newIndex--;
-                      final songIds = List<String>.from(playlist.songIds);
-                      final item = songIds.removeAt(oldIndex);
-                      songIds.insert(newIndex, item);
-                      ref.read(playlistProvider.notifier).updatePlaylist(playlist.id, songIds: songIds);
+                      // Reorder the *visible* songs. playlist.songIds may
+                      // contain ids of deleted songs which are filtered out
+                      // of the list, so indices must be mapped back first.
+                      final visibleIds = playlist.songIds
+                          .where((id) => allSongs.any((s) => s.id == id))
+                          .toList();
+                      if (oldIndex < 0 || oldIndex >= visibleIds.length) return;
+                      if (newIndex < 0 || newIndex > visibleIds.length) return;
+                      final item = visibleIds.removeAt(oldIndex);
+                      visibleIds.insert(newIndex, item);
+                      final missingIds =
+                          playlist.songIds.where((id) => !visibleIds.contains(id)).toList();
+                      ref.read(playlistProvider.notifier)
+                          .updatePlaylist(playlist.id, songIds: [...visibleIds, ...missingIds]);
                     },
                     itemBuilder: (context, index) {
                       final song = playlistSongs[index];
@@ -251,6 +260,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                           tooltip: 'Remove from playlist',
                           onPressed: () async {
                             await HapticFeedback.mediumImpact();
+                            if (!context.mounted) return;
                             final confirmed = await showDialog<bool>(
                               context: context,
                               builder: (ctx) => AlertDialog(

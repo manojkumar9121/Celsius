@@ -28,7 +28,10 @@ class TransitionPage extends Page {
 
 class _TransitionRoute<T> extends PageRoute<T> {
   final Widget child;
+
+  @override
   final Duration transitionDuration;
+
   final bool slideUp;
 
   _TransitionRoute({

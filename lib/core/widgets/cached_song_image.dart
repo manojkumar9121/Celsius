@@ -62,7 +62,7 @@ class _SongCoverImageState extends State<SongCoverImage> {
         width: widget.width,
         height: widget.height,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
+        errorBuilder: (_, _, _) =>
             widget.placeholderBuilder(context, widget.width ?? 44, widget.height ?? 44),
       ),
     );

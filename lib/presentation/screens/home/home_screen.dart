@@ -25,9 +25,13 @@ class HomeScreen extends ConsumerWidget {
     final now = DateTime.now();
     final hour = now.hour;
     String greeting;
-    if (hour < 12) greeting = 'Good morning';
-    else if (hour < 18) greeting = 'Good afternoon';
-    else greeting = 'Good evening';
+    if (hour < 12) {
+      greeting = 'Good morning';
+    } else if (hour < 18) {
+      greeting = 'Good afternoon';
+    } else {
+      greeting = 'Good evening';
+    }
 
     final recentlyPlayed = songs
         .where((s) => s.lastPlayedAt != null && s.lastPlayedAt! > 0)
@@ -196,6 +200,7 @@ class HomeScreen extends ConsumerWidget {
                 onTap: () async {
                   await HapticFeedback.lightImpact();
                   ref.read(audioPlayerStateProvider.notifier).playSong(song, sectionSongs);
+                  if (!context.mounted) return;
                   context.push('/now-playing');
                 },
                 child: Container(
@@ -264,6 +269,7 @@ class HomeScreen extends ConsumerWidget {
                 onTap: () async {
                   await HapticFeedback.lightImpact();
                   ref.read(audioPlayerStateProvider.notifier).playSong(song, favorites);
+                  if (!context.mounted) return;
                   context.push('/now-playing');
                 },
                 child: Container(
@@ -336,6 +342,7 @@ class HomeScreen extends ConsumerWidget {
                 icon: const Icon(Icons.add_circle_outline, size: 22),
                 onPressed: () async {
                   await HapticFeedback.lightImpact();
+                  if (!context.mounted) return;
                   await showCreatePlaylistDialog(context, ref);
                 },
                 tooltip: 'Create playlist',
@@ -349,6 +356,7 @@ class HomeScreen extends ConsumerWidget {
             child: GestureDetector(
               onTap: () async {
                 await HapticFeedback.mediumImpact();
+                if (!context.mounted) return;
                 await showCreatePlaylistDialog(context, ref);
               },
               child: Container(
@@ -357,7 +365,7 @@ class HomeScreen extends ConsumerWidget {
                   color: colorScheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: colorScheme.outline.withOpacity(0.3),
+                    color: colorScheme.outline.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Center(
