@@ -7,6 +7,7 @@ import 'package:celsuis/presentation/providers/library_provider.dart';
 import 'package:celsuis/presentation/providers/playlist_provider.dart';
 import 'package:celsuis/presentation/providers/audio_player_provider.dart';
 import 'package:celsuis/presentation/widgets/song_tile.dart';
+import 'package:celsuis/presentation/widgets/song_actions_menu.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
 import 'package:celsuis/domain/entities/playlist_entity.dart';
 import 'package:file_picker/file_picker.dart';
@@ -288,6 +289,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
         return SongTile(
           song: song,
           isPlaying: isPlaying,
+          trailing: SongActionsMenu(song: song),
           onTap: () async {
             await HapticFeedback.lightImpact();
             ref.read(audioPlayerProvider.notifier).playSong(song, songs);
@@ -334,6 +336,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
             return SongTile(
               song: song,
               isPlaying: isPlaying,
+              trailing: SongActionsMenu(song: song),
               onTap: () async {
                 await HapticFeedback.lightImpact();
                 ref.read(audioPlayerProvider.notifier).playSong(song, songs);
@@ -440,6 +443,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
             return SongTile(
               song: song,
               isPlaying: isPlaying,
+              trailing: SongActionsMenu(song: song),
               onTap: () async {
                 await HapticFeedback.lightImpact();
                 ref.read(audioPlayerProvider.notifier).playSong(song, songs);

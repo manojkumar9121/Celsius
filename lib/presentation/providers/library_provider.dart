@@ -43,6 +43,39 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     await loadSongs();
     if (settings.autoScanEnabled && managedFolders.isNotEmpty) {
       await _rescanManagedFolders(managedFolders);
+      // Newly found songs are persisted during the rescan; reload so they
+      // show up immediately instead of on the next app start.
+      if (mounted) {
+        state = state.copyWith(
+          songs: HiveStorage.getAllSongs().map((box) => box.toEntity()).toList(),
+        );
+      }
+    }
+  }
+
+  /// Manual library refresh (pull-to-refresh on the home screen): reloads the
+  /// library from storage and rescans every managed folder for new songs.
+  /// Unlike the startup auto-scan, this runs even when autoScan is disabled —
+  /// a manual refresh is an explicit request to pick up new files.
+  Future<void> refreshLibrary() async {
+    try {
+      state = state.copyWith(
+        songs: HiveStorage.getAllSongs().map((box) => box.toEntity()).toList(),
+        error: null,
+      );
+    } catch (e) {
+      state = state.copyWith(error: e.toString());
+    }
+
+    final settings = HiveStorage.getSettings();
+    if (settings.managedFolders.isNotEmpty) {
+      await _rescanManagedFolders(settings.managedFolders);
+    }
+
+    if (mounted) {
+      state = state.copyWith(
+        songs: HiveStorage.getAllSongs().map((box) => box.toEntity()).toList(),
+      );
     }
   }
 

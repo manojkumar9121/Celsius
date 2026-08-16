@@ -9,6 +9,7 @@ import 'package:celsuis/presentation/providers/playlist_provider.dart';
 import 'package:celsuis/presentation/providers/library_provider.dart';
 import 'package:celsuis/presentation/providers/audio_player_provider.dart';
 import 'package:celsuis/presentation/widgets/song_tile.dart';
+import 'package:celsuis/presentation/widgets/song_actions_menu.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
 import 'package:celsuis/core/widgets/cached_song_image.dart';
 import 'package:go_router/go_router.dart';
@@ -255,33 +256,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                         song: song,
                         isPlaying: isPlaying,
                         dismissEnabled: false,
-                        trailing: IconButton(
-                          icon: Icon(Icons.remove_circle_outline, color: colorScheme.error),
-                          tooltip: 'Remove from playlist',
-                          onPressed: () async {
-                            await HapticFeedback.mediumImpact();
-                            if (!context.mounted) return;
-                            final confirmed = await showDialog<bool>(
-                              context: context,
-                              builder: (ctx) => AlertDialog(
-                                title: const Text('Remove song?'),
-                                content: Text('Remove "${song.title}" from this playlist?'),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text('Cancel'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text('Remove'),
-                                  ),
-                                ],
-                              ),
-                            );
-                            if (confirmed == true) {
-                              ref.read(playlistProvider.notifier).removeSongFromPlaylist(playlist.id, song.id);
-                            }
-                          },
+                        trailing: SongActionsMenu(
+                          song: song,
+                          playlistId: playlist.id,
                         ),
                         onTap: () async {
                           await HapticFeedback.lightImpact();

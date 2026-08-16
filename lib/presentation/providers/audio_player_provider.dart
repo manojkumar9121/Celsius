@@ -217,6 +217,16 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     await handler.skipToQueueItem(index);
   }
 
+  /// Adds [song] to the current playback queue without interrupting
+  /// playback. When [playNext] is true the song is inserted right after the
+  /// currently playing song.
+  Future<void> addToQueue(SongEntity song, {bool playNext = false}) async {
+    final handler = _handler;
+    if (handler == null) return;
+    await handler.addToQueue([song], playNext: playNext);
+    state = state.copyWith(queue: List.of(handler.songs));
+  }
+
   void seek(Duration position) {
     final handler = _handler;
     if (handler == null) return;

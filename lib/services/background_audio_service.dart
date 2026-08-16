@@ -22,6 +22,13 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   /// double counting when the same index is re-emitted (e.g. after a
   /// shuffle/reorder rebuild that keeps the current song).
   int _countedIndex = -1;
+  /// While true, the current-index handler updates [_currentIndex] but does
+  /// NOT emit mediaItem/play-count events. Used during in-place source
+  /// reorders (shuffle toggles, queue reorders), where every move() fires an
+  /// intermediate currentIndex event that would otherwise flash wrong songs
+  /// in the Now Playing UI. The settled song is re-emitted once the reorder
+  /// completes.
+  bool _suppressCurrentSongEvents = false;
 
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<ProcessingState>? _processingStateSub;
@@ -82,16 +89,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       try {
         if (index == null || index < 0 || index >= _queue.length) return;
         _currentIndex = index;
-        final song = _queue[index];
-        _lastMediaItem = _songToMediaItem(song).copyWith(duration: player.duration);
-        mediaItem.add(_lastMediaItem!);
-        // Count each play once, when the song becomes current (covers
-        // initial play, manual skips and auto-advance alike).
-        if (index != _countedIndex) {
-          _countedIndex = index;
-          unawaited(HiveStorage.incrementPlayCount(song.id).catchError((Object e) {
-            debugPrint('Failed to increment play count for ${song.id}: $e');
-          }));
+        if (!_suppressCurrentSongEvents) {
+          _emitCurrentSong();
         }
         playbackState.add(playbackState.value.copyWith(
           queueIndex: index,
@@ -425,6 +424,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         : _queue.indexWhere((s) => s.id == currentId);
     if (_currentIndex < 0) _currentIndex = 0;
 
+    // Reorder the loaded source in place (gapless) and let the reorder
+    // suppression handle the intermediate index events without flicker.
     await _rebuildSourceKeepingPlayback(wasPlaying, currentPosition);
     // Re-emit the queue so the system UI (and any queue listeners) see the
     // new order even when the current song did not change.
@@ -492,6 +493,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   /// Reorders the loaded [ConcatenatingAudioSource] to match [newOrder]
   /// without stopping playback. Moves are applied from the end backwards so
   /// an earlier move never disturbs items that have already been placed.
+  /// While the moves run, mediaItem emissions are suppressed so the
+  /// intermediate currentIndex events cannot flicker the Now Playing UI.
   Future<void> _reorderSourceInPlace(List<SongEntity> newOrder) async {
     final src = _source;
     if (src == null) return;
@@ -506,15 +509,91 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     final targetIds = [for (final s in newOrder) s.id];
     if (currentIds.length != targetIds.length) return;
 
-    for (int i = targetIds.length - 1; i >= 0; i--) {
-      final targetId = targetIds[i];
-      final cur = currentIds.indexOf(targetId);
-      if (cur < 0) return; // order mismatch — let the caller fall back
-      if (cur == i) continue;
-      await src.move(cur, i);
-      currentIds.removeAt(cur);
-      currentIds.insert(i, targetId);
+    _suppressCurrentSongEvents = true;
+    try {
+      for (int i = targetIds.length - 1; i >= 0; i--) {
+        final targetId = targetIds[i];
+        final cur = currentIds.indexOf(targetId);
+        if (cur < 0) return; // order mismatch — let the caller fall back
+        if (cur == i) continue;
+        await src.move(cur, i);
+        currentIds.removeAt(cur);
+        currentIds.insert(i, targetId);
+      }
+    } finally {
+      _suppressCurrentSongEvents = false;
+      // The final index event may have been suppressed mid-reorder — emit
+      // the settled current song so the UI always ends on the correct one.
+      _emitCurrentSong();
     }
+  }
+
+  /// Emits the song at [_currentIndex] to the mediaItem stream and records a
+  /// play. Called on every (non-suppressed) index change and once after an
+  /// in-place source reorder has settled.
+  void _emitCurrentSong() {
+    if (_currentIndex < 0 || _currentIndex >= _queue.length) return;
+    final song = _queue[_currentIndex];
+    _lastMediaItem = _songToMediaItem(song).copyWith(duration: player.duration);
+    mediaItem.add(_lastMediaItem!);
+    // Count each play once, when the song becomes current (covers
+    // initial play, manual skips and auto-advance alike).
+    if (_currentIndex != _countedIndex) {
+      _countedIndex = _currentIndex;
+      unawaited(HiveStorage.incrementPlayCount(song.id).catchError((Object e) {
+        debugPrint('Failed to increment play count for ${song.id}: $e');
+      }));
+    }
+  }
+
+  /// Adds [songs] to the end of the current queue (or right after the current
+  /// song when [playNext] is true) without interrupting playback. Songs
+  /// already in the queue are skipped.
+  Future<void> addToQueue(List<SongEntity> songs, {bool playNext = false}) async {
+    if (songs.isEmpty) return;
+    if (_queue.isEmpty) {
+      await setQueue(songs);
+      return;
+    }
+
+    final newSongs = songs.where((s) => !_queue.any((e) => e.id == s.id)).toList();
+    if (newSongs.isEmpty) return;
+
+    final insertIndex = playNext ? _currentIndex + 1 : _queue.length;
+    _queue.insertAll(insertIndex, newSongs);
+    if (!_isShuffled) {
+      _orderedQueue.insertAll(insertIndex, newSongs);
+    } else {
+      // Keep the songs when shuffle is later turned off.
+      _orderedQueue.addAll(newSongs);
+    }
+
+    final src = _source;
+    if (src != null && player.processingState != ProcessingState.idle) {
+      try {
+        // Gapless: insert the new items into the loaded source at the same
+        // position. Inserting at/after the current index does not disturb
+        // the currently playing item.
+        await src.insertAll(
+          insertIndex,
+          [for (final s in newSongs) _songToAudioSource(s)],
+        );
+        queue.add(_queue.map(_songToMediaItem).toList());
+        return;
+      } catch (e) {
+        debugPrint('Queue insert failed, falling back to reload: $e');
+      }
+    }
+
+    // Fallback: full reload with the updated queue.
+    await _buildSource();
+    if (_source == null) return;
+    await player.setAudioSource(
+      _source!,
+      initialIndex: _currentIndex,
+      initialPosition: player.position,
+    );
+    queue.add(_queue.map(_songToMediaItem).toList());
   }
 
   void _notifyShuffleMode() {

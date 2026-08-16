@@ -46,7 +46,9 @@ class HomeScreen extends ConsumerWidget {
             Expanded(
               child: RefreshIndicator(
                 onRefresh: () async {
-                  ref.read(libraryProvider.notifier).loadSongs();
+                  // Rescans the managed folders so new songs added on disk
+                  // appear without restarting the app.
+                  await ref.read(libraryProvider.notifier).refreshLibrary();
                 },
                 child: isLoading
                     ? _buildLoadingState(context)
