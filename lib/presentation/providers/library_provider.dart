@@ -151,7 +151,7 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
             await coverFile.writeAsBytes(artwork);
             if (await coverFile.exists() && await coverFile.length() > 0) {
               box.coverArtPath = coverFile.path;
-              await box.save();
+              await HiveStorage.updateSong(box);
             }
           }
         } catch (e) {
@@ -355,7 +355,7 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
         }
         if (corrected > 0 && corrected != existingBox.durationMs) {
           existingBox.durationMs = corrected;
-          await existingBox.save();
+          await HiveStorage.updateSong(existingBox);
         }
       }
       processed++;

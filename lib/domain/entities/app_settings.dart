@@ -27,6 +27,7 @@ class AppSettings {
   final bool showMediaNotification;
   final bool notificationOngoing;
   final bool stopOnPause;
+  final bool autoplayEnabled;
 
   const AppSettings({
     this.themePreset = ThemePreset.dark,
@@ -45,6 +46,7 @@ class AppSettings {
     this.showMediaNotification = true,
     this.notificationOngoing = true,
     this.stopOnPause = true,
+    this.autoplayEnabled = true,
   });
 
   AppSettings copyWith({
@@ -64,6 +66,7 @@ class AppSettings {
     bool? showMediaNotification,
     bool? notificationOngoing,
     bool? stopOnPause,
+    bool? autoplayEnabled,
   }) {
     return AppSettings(
       themePreset: themePreset ?? this.themePreset,
@@ -82,7 +85,71 @@ class AppSettings {
       showMediaNotification: showMediaNotification ?? this.showMediaNotification,
       notificationOngoing: notificationOngoing ?? this.notificationOngoing,
       stopOnPause: stopOnPause ?? this.stopOnPause,
+      autoplayEnabled: autoplayEnabled ?? this.autoplayEnabled,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'themePreset': themePreset.index,
+      'crossfadeEnabled': crossfadeEnabled,
+      'crossfadeDurationMs': crossfadeDurationMs,
+      'gaplessPlayback': gaplessPlayback,
+      'defaultRepeatMode': defaultRepeatMode.index,
+      'defaultShuffle': defaultShuffle,
+      'autoScanEnabled': autoScanEnabled,
+      'managedFolders': managedFolders,
+      'primaryColor': primaryColor,
+      'accentColor': accentColor,
+      'waveformColor': waveformColor,
+      'waveformStyle': waveformStyle.index,
+      'waveformAnimationSpeed': waveformAnimationSpeed,
+      'showMediaNotification': showMediaNotification,
+      'notificationOngoing': notificationOngoing,
+      'stopOnPause': stopOnPause,
+      'autoplayEnabled': autoplayEnabled,
+    };
+  }
+
+  /// Defensive: every field falls back to its default when missing or
+  /// wrong-typed, so records written by older builds (or with a future
+  /// schema) never crash decoding.
+  factory AppSettings.fromJson(Map<String, dynamic> json) {
+    return AppSettings(
+      themePreset: _enumFromIndex<ThemePreset>(json['themePreset'], ThemePreset.values, ThemePreset.dark),
+      crossfadeEnabled: json['crossfadeEnabled'] == true,
+      crossfadeDurationMs: json['crossfadeDurationMs'] is num
+          ? (json['crossfadeDurationMs'] as num).toInt()
+          : 300,
+      gaplessPlayback: json['gaplessPlayback'] != false,
+      defaultRepeatMode: _enumFromIndex<AppSettingsRepeatMode>(
+          json['defaultRepeatMode'], AppSettingsRepeatMode.values, AppSettingsRepeatMode.off),
+      defaultShuffle: json['defaultShuffle'] == true,
+      autoScanEnabled: json['autoScanEnabled'] != false,
+      managedFolders: json['managedFolders'] is List
+          ? (json['managedFolders'] as List).whereType<String>().toList()
+          : const [],
+      primaryColor: json['primaryColor'] is String ? json['primaryColor'] as String : null,
+      accentColor: json['accentColor'] is String ? json['accentColor'] as String : null,
+      waveformColor: json['waveformColor'] is String ? json['waveformColor'] as String : '#4ade80',
+      waveformStyle: _enumFromIndex<WaveformStyle>(json['waveformStyle'], WaveformStyle.values, WaveformStyle.bars),
+      waveformAnimationSpeed: json['waveformAnimationSpeed'] is num
+          ? (json['waveformAnimationSpeed'] as num).toDouble()
+          : 1.0,
+      showMediaNotification: json['showMediaNotification'] != false,
+      notificationOngoing: json['notificationOngoing'] != false,
+      stopOnPause: json['stopOnPause'] != false,
+      autoplayEnabled: json['autoplayEnabled'] != false,
+    );
+  }
+
+  /// Reads an enum from a stored index; clamps out-of-range values and falls
+  /// back to [fallback] for missing/wrong-typed data.
+  static T _enumFromIndex<T>(dynamic value, List<T> values, T fallback) {
+    if (value is! num) return fallback;
+    final index = value.toInt();
+    if (index < 0 || index >= values.length) return fallback;
+    return values[index];
   }
 }
 

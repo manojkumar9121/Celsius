@@ -47,7 +47,7 @@ class PlaylistNotifier extends StateNotifier<PlaylistState> {
     if (box != null) {
       box.name = newName;
       box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-      await box.save();
+      await HiveStorage.updatePlaylist(box);
     }
     final updated = state.playlists.map((p) {
       if (p.id == id) return p.copyWith(name: newName);
@@ -62,7 +62,7 @@ class PlaylistNotifier extends StateNotifier<PlaylistState> {
     if (box.songIds.contains(songId)) return;
     box.songIds.add(songId);
     box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-    await box.save();
+    await HiveStorage.updatePlaylist(box);
 
     final updated = state.playlists.map((p) {
       if (p.id == playlistId) return p.copyWith(songIds: [...p.songIds, songId]);
@@ -76,7 +76,7 @@ class PlaylistNotifier extends StateNotifier<PlaylistState> {
     if (box != null) {
       box.songIds.remove(songId);
       box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-      await box.save();
+      await HiveStorage.updatePlaylist(box);
     }
     final updated = state.playlists.map((p) {
       if (p.id == playlistId) return p.copyWith(songIds: p.songIds.where((id) => id != songId).toList());
@@ -95,7 +95,7 @@ class PlaylistNotifier extends StateNotifier<PlaylistState> {
         ..addAll(songIds);
     }
     box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-    await box.save();
+    await HiveStorage.updatePlaylist(box);
 
     final updated = state.playlists.map((p) {
       if (p.id == playlistId) return p.copyWith(name: name, songIds: songIds);
@@ -109,7 +109,7 @@ class PlaylistNotifier extends StateNotifier<PlaylistState> {
     if (box == null) return;
     box.coverArtPath = coverPath;
     box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-    await box.save();
+    await HiveStorage.updatePlaylist(box);
 
     final updated = state.playlists.map((p) {
       if (p.id == playlistId) return p.copyWith(coverArtPath: coverPath);

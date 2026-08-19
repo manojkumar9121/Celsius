@@ -56,4 +56,44 @@ class SongEntity {
       isFavorite: isFavorite ?? this.isFavorite,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'title': title,
+      'artist': artist,
+      'album': album,
+      'durationMs': durationMs,
+      'filePath': filePath,
+      'realPath': realPath,
+      'coverArtPath': coverArtPath,
+      'dateAdded': dateAdded?.millisecondsSinceEpoch,
+      'lastPlayedAt': lastPlayedAt,
+      'playCount': playCount,
+      'isFavorite': isFavorite,
+    };
+  }
+
+  /// Defensive: every field falls back to its default when missing, so
+  /// records written by older builds (or with future fields absent) never
+  /// crash decoding.
+  factory SongEntity.fromJson(Map<String, dynamic> json) {
+    final dateAddedMs = json['dateAdded'];
+    return SongEntity(
+      id: json['id'] is String ? json['id'] as String : '',
+      title: json['title'] is String ? json['title'] as String : 'Unknown Title',
+      artist: json['artist'] is String ? json['artist'] as String : 'Unknown Artist',
+      album: json['album'] is String ? json['album'] as String : 'Unknown Album',
+      durationMs: json['durationMs'] is num ? (json['durationMs'] as num).toInt() : 0,
+      filePath: json['filePath'] is String ? json['filePath'] as String : '',
+      realPath: json['realPath'] is String ? json['realPath'] as String : null,
+      coverArtPath: json['coverArtPath'] is String ? json['coverArtPath'] as String : null,
+      dateAdded: dateAddedMs is num
+          ? DateTime.fromMillisecondsSinceEpoch(dateAddedMs.toInt())
+          : null,
+      lastPlayedAt: json['lastPlayedAt'] is num ? (json['lastPlayedAt'] as num).toInt() : null,
+      playCount: json['playCount'] is num ? (json['playCount'] as num).toInt() : 0,
+      isFavorite: json['isFavorite'] == true,
+    );
+  }
 }

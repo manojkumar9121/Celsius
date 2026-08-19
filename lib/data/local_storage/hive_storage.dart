@@ -1,13 +1,29 @@
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:celsuis/data/local_storage/song_box.dart';
 import 'package:celsuis/data/local_storage/playlist_box.dart';
 import 'package:celsuis/data/local_storage/settings_box.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
+import 'package:celsuis/domain/entities/playlist_entity.dart';
+import 'package:celsuis/domain/entities/song_entity.dart';
 import 'package:celsuis/services/waveform_extractor_service.dart';
 
-/// Current schema version for the songs box. Bump this when adding new Hive fields.
+/// Current schema version for JSON payloads. Bump this when the JSON layout
+/// of stored records changes, and add the corresponding migration step in
+/// [_migrateRecord] so old data is upgraded in place instead of lost.
 const int _kCurrentSchemaVersion = 1;
 
+/// Hive storage backed by JSON payloads.
+///
+/// Records are stored as JSON strings (built-in Hive type), so decoding can
+/// never fail regardless of which build wrote them — schema changes are
+/// handled by [_migrateRecord] on read, never by resetting the box.
+///
+/// The legacy binary adapters ([SongBoxAdapter], [PlaylistBoxAdapter],
+/// [SettingsBoxAdapter]) are only used for a one-time migration of boxes
+/// written by older builds; new data is always JSON.
 class HiveStorage {
   static const String _songsBoxName = 'songs';
   static const String _playlistsBoxName = 'playlists';
@@ -17,9 +33,11 @@ class HiveStorage {
   static bool get isInitialized => _initialized;
 
   static Future<void> init() async {
-    // Hive keeps the adapter registry across Hive.close(), so a retry
-    // (HiveErrorScreen -> Hive.close() -> init()) must not re-register —
-    // re-registering a typeId throws "already a type adapter".
+    // Legacy adapters are still needed to DECODE data written by older
+    // builds during the one-time migration. Hive keeps the adapter registry
+    // across Hive.close(), so a retry (HiveErrorScreen -> Hive.close() ->
+    // init()) must not re-register — re-registering a typeId throws
+    // "already a type adapter".
     if (!Hive.isAdapterRegistered(SongBoxAdapter().typeId)) {
       Hive.registerAdapter(SongBoxAdapter());
     }
@@ -29,67 +47,146 @@ class HiveStorage {
     if (!Hive.isAdapterRegistered(SettingsBoxAdapter().typeId)) {
       Hive.registerAdapter(SettingsBoxAdapter());
     }
-    await Hive.openBox<SongBox>(_songsBoxName);
-    await Hive.openBox<PlaylistBox>(_playlistsBoxName);
-    await Hive.openBox<SettingsBox>(_settingsBoxName);
-    await _migrateHiveSchema();
-    await _ensureDefaultSettings();
+    await _openBoxOrReset(_songsBoxName);
+    await _openBoxOrReset(_playlistsBoxName);
+    await _openBoxOrReset(_settingsBoxName);
+    await _migrateLegacyBoxes();
     _initialized = true;
+    await _ensureDefaultSettings();
   }
 
-  static Future<void> _migrateHiveSchema() async {
-    final songsBox = Hive.isBoxOpen(_songsBoxName) ? Hive.box<SongBox>(_songsBoxName) : null;
-
-    if (songsBox == null || songsBox.isEmpty) return;
-
-    // Check if any song needs migration (has schemaVersion < current)
-    bool needsMigration = false;
-    for (final key in songsBox.keys.toList()) {
-      final song = songsBox.get(key);
-      if (song != null && song.schemaVersion < _kCurrentSchemaVersion) {
-        needsMigration = true;
-        break;
+  /// Opens a box (untyped: values are JSON strings). Only a truly corrupted
+  /// file (garbage bytes, wrong checksum) is reset — schema drift can no
+  /// longer break opening, because JSON always decodes.
+  static Future<void> _openBoxOrReset(String name) async {
+    try {
+      await Hive.openBox<dynamic>(name);
+    } catch (e) {
+      debugPrint('Box "$name" failed to open ($e) — resetting it');
+      try {
+        await Hive.deleteBoxFromDisk(name);
+      } catch (e2) {
+        debugPrint('Failed to delete box "$name" from disk: $e2');
       }
-    }
-    if (!needsMigration) return;
-
-    // Apply migration: update schemaVersion on all songs that need it
-    for (final key in songsBox.keys.toList()) {
-      final song = songsBox.get(key);
-      if (song == null) continue;
-      if (song.schemaVersion < _kCurrentSchemaVersion) {
-        song.schemaVersion = _kCurrentSchemaVersion;
-        await song.save();
-      }
+      await Hive.openBox<dynamic>(name);
     }
   }
 
-  static Box<SongBox>? get songsBox {
-    if (!_initialized) return null;
-    return Hive.box<SongBox>(_songsBoxName);
+  /// One-time migration: boxes written by older builds contain typed binary
+  /// frames (SongBox/PlaylistBox/SettingsBox objects) instead of JSON
+  /// strings. Rewrite every record in place as JSON so it survives forever.
+  static Future<void> _migrateLegacyBoxes() async {
+    await _migrateBox(_songsBoxName, (value) {
+      if (value is SongBox) {
+        return jsonEncode({'schemaVersion': _kCurrentSchemaVersion, ...value.toEntity().toJson()});
+      }
+      return null;
+    });
+    await _migrateBox(_playlistsBoxName, (value) {
+      if (value is PlaylistBox) {
+        return jsonEncode({'schemaVersion': _kCurrentSchemaVersion, ...value.toEntity().toJson()});
+      }
+      return null;
+    });
+    await _migrateBox(_settingsBoxName, (value) {
+      if (value is SettingsBox) {
+        return jsonEncode({'schemaVersion': _kCurrentSchemaVersion, ...value.toSettings().toJson()});
+      }
+      return null;
+    });
   }
 
-  static Box<PlaylistBox>? get playlistsBox {
-    if (!_initialized) return null;
-    return Hive.box<PlaylistBox>(_playlistsBoxName);
+  /// Rewrites legacy typed records in [name] as JSON strings. Records that
+  /// are neither JSON nor a known legacy type are skipped (dropped) rather
+  /// than crashing the app.
+  static Future<void> _migrateBox(String name, String? Function(dynamic value) encode) async {
+    final box = Hive.box<dynamic>(name);
+    for (final key in box.keys.toList()) {
+      final value = box.get(key);
+      if (value is String) continue; // already JSON
+      try {
+        final encoded = encode(value);
+        if (encoded != null) {
+          debugPrint('Migrating legacy record "$key" in "$name" to JSON');
+          await box.put(key, encoded);
+        } else {
+          debugPrint('Skipping unreadable record "$key" in "$name"');
+          await box.delete(key);
+        }
+      } catch (e) {
+        debugPrint('Skipping unreadable record "$key" in "$name": $e');
+        await box.delete(key);
+      }
+    }
   }
 
-  static Box<SettingsBox>? get settingsBox {
+  // JSON encoding / decoding helpers --------------------------------------
+
+  static String? _safeEncode(Map<String, dynamic> json) {
+    try {
+      return jsonEncode({'schemaVersion': _kCurrentSchemaVersion, ...json});
+    } catch (e) {
+      debugPrint('Failed to encode record: $e');
+      return null;
+    }
+  }
+
+  static Map<String, dynamic>? _safeDecode(String? raw) {
+    if (raw == null) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      return _migrateRecord(decoded);
+    } catch (e) {
+      debugPrint('Skipping undecodable record: $e');
+      return null;
+    }
+  }
+
+  /// Applies schema migrations based on the record's stored [schemaVersion].
+  /// New migrations go here as the schema evolves; old data is upgraded in
+  /// place instead of being reset.
+  static Map<String, dynamic> _migrateRecord(Map<String, dynamic> record) {
+    final version = (record['schemaVersion'] as num?)?.toInt() ?? 0;
+    if (version == _kCurrentSchemaVersion) return record;
+    debugPrint('Migrating record from schema $version to $_kCurrentSchemaVersion');
+    // Future migrations go here, e.g.:
+    // if (version < 2) { record['newField'] = record.remove('oldField'); }
+    return record;
+  }
+
+  static Box<dynamic>? get songsBox {
     if (!_initialized) return null;
-    return Hive.box<SettingsBox>(_settingsBoxName);
+    return Hive.box<dynamic>(_songsBoxName);
+  }
+
+  static Box<dynamic>? get playlistsBox {
+    if (!_initialized) return null;
+    return Hive.box<dynamic>(_playlistsBoxName);
+  }
+
+  static Box<dynamic>? get settingsBox {
+    if (!_initialized) return null;
+    return Hive.box<dynamic>(_settingsBoxName);
   }
 
   // Song operations
   static Future<void> addSong(SongBox song) async {
-    await songsBox?.put(song.id, song);
+    final encoded = _safeEncode(song.toEntity().toJson());
+    if (encoded != null) {
+      await songsBox?.put(song.id, encoded);
+    }
   }
 
   static Future<void> updateSong(SongBox song) async {
-    await songsBox?.put(song.id, song);
+    final encoded = _safeEncode(song.toEntity().toJson());
+    if (encoded != null) {
+      await songsBox?.put(song.id, encoded);
+    }
   }
 
   static Future<void> deleteSong(String id) async {
-    final song = songsBox?.get(id);
+    final song = getSong(id);
     await songsBox?.delete(id);
     // Clear the waveform cache entry (a Hive box keyed by audio path).
     if (song != null && song.filePath.isNotEmpty) {
@@ -99,7 +196,7 @@ class HiveStorage {
 
   static Future<void> deleteSongs(List<String> ids) async {
     for (final id in ids) {
-      final song = songsBox?.get(id);
+      final song = getSong(id);
       await songsBox?.delete(id);
       if (song != null && song.filePath.isNotEmpty) {
         await WaveformExtractorService.instance.removeFromCache(song.filePath);
@@ -112,41 +209,68 @@ class HiveStorage {
   }
 
   static List<SongBox> getAllSongs() {
-    return songsBox?.values.toList() ?? [];
+    final box = songsBox;
+    if (box == null) return [];
+    final result = <SongBox>[];
+    for (final key in box.keys.toList()) {
+      final record = _safeDecode(box.get(key) as String?);
+      if (record == null) continue;
+      try {
+        result.add(SongBox.fromEntity(SongEntity.fromJson(record)));
+      } catch (e) {
+        debugPrint('Skipping unreadable song record $key: $e');
+      }
+    }
+    return result;
   }
 
   static SongBox? getSong(String id) {
-    return songsBox?.get(id);
+    final box = songsBox;
+    if (box == null) return null;
+    final record = _safeDecode(box.get(id) as String?);
+    if (record == null) return null;
+    try {
+      return SongBox.fromEntity(SongEntity.fromJson(record));
+    } catch (e) {
+      debugPrint('Skipping unreadable song record $id: $e');
+      return null;
+    }
   }
 
   static Future<void> incrementPlayCount(String id) async {
-    final song = songsBox?.get(id);
+    final song = getSong(id);
     if (song != null) {
       song.playCount++;
       song.lastPlayedAt = DateTime.now().millisecondsSinceEpoch;
-      await song.save();
+      await updateSong(song);
     }
   }
 
   static Future<void> toggleFavorite(String id) async {
-    final song = songsBox?.get(id);
+    final song = getSong(id);
     if (song != null) {
       song.isFavorite = !song.isFavorite;
-      await song.save();
+      await updateSong(song);
     }
   }
 
   static List<SongBox> getFavoriteSongs() {
-    return songsBox?.values.where((s) => s.isFavorite).toList() ?? [];
+    return getAllSongs().where((s) => s.isFavorite).toList();
   }
 
   // Playlist operations
   static Future<void> addPlaylist(PlaylistBox playlist) async {
-    await playlistsBox?.put(playlist.id, playlist);
+    final encoded = _safeEncode(playlist.toEntity().toJson());
+    if (encoded != null) {
+      await playlistsBox?.put(playlist.id, encoded);
+    }
   }
 
   static Future<void> updatePlaylist(PlaylistBox playlist) async {
-    await playlistsBox?.put(playlist.id, playlist);
+    final encoded = _safeEncode(playlist.toEntity().toJson());
+    if (encoded != null) {
+      await playlistsBox?.put(playlist.id, encoded);
+    }
   }
 
   static Future<void> deletePlaylist(String id) async {
@@ -154,28 +278,56 @@ class HiveStorage {
   }
 
   static List<PlaylistBox> getAllPlaylists() {
-    return playlistsBox?.values.toList() ?? [];
+    final box = playlistsBox;
+    if (box == null) return [];
+    final result = <PlaylistBox>[];
+    for (final key in box.keys.toList()) {
+      final record = _safeDecode(box.get(key) as String?);
+      if (record == null) continue;
+      try {
+        result.add(PlaylistBox.fromEntity(PlaylistEntity.fromJson(record)));
+      } catch (e) {
+        debugPrint('Skipping unreadable playlist record $key: $e');
+      }
+    }
+    return result;
   }
 
   static PlaylistBox? getPlaylist(String id) {
-    return playlistsBox?.get(id);
+    final box = playlistsBox;
+    if (box == null) return null;
+    final record = _safeDecode(box.get(id) as String?);
+    if (record == null) return null;
+    try {
+      return PlaylistBox.fromEntity(PlaylistEntity.fromJson(record));
+    } catch (e) {
+      debugPrint('Skipping unreadable playlist record $id: $e');
+      return null;
+    }
   }
 
   // Settings operations
   static Future<void> saveSettings(AppSettings settings) async {
     if (!_initialized) return;
-    final box = SettingsBox.fromSettings(settings);
-    await settingsBox?.put('app_settings', box);
-    await settingsBox?.flush();
+    final encoded = _safeEncode(settings.toJson());
+    if (encoded != null) {
+      await settingsBox?.put('app_settings', encoded);
+      await settingsBox?.flush();
+    }
   }
 
   static AppSettings getSettings() {
     if (!_initialized) return const AppSettings();
-    final box = settingsBox?.get('app_settings');
-    if (box != null) {
-      return box.toSettings();
+    final box = settingsBox;
+    if (box == null) return const AppSettings();
+    final record = _safeDecode(box.get('app_settings') as String?);
+    if (record == null) return const AppSettings();
+    try {
+      return AppSettings.fromJson(record);
+    } catch (e) {
+      debugPrint('Settings decode failed ($e) — using defaults');
+      return const AppSettings();
     }
-    return const AppSettings();
   }
 
   // Folder operations
@@ -194,7 +346,20 @@ class HiveStorage {
   }
 
   static Future<void> _ensureDefaultSettings() async {
-    if (settingsBox?.get('app_settings') == null) {
+    final box = settingsBox;
+    if (box == null) return;
+    final raw = box.get('app_settings');
+    if (raw == null) {
+      await saveSettings(const AppSettings());
+      return;
+    }
+    // A stored record that can't be parsed (written by an incompatible
+    // schema) is dropped and replaced with defaults instead of failing init.
+    if (_safeDecode(raw as String?) == null) {
+      debugPrint('Settings record unreadable — resetting to defaults');
+      try {
+        await box.delete('app_settings');
+      } catch (_) {}
       await saveSettings(const AppSettings());
     }
   }

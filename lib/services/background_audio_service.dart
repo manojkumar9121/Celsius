@@ -374,6 +374,41 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   Future<void> _finishQueue() async {
+    final autoplayEnabled = HiveStorage.getSettings().autoplayEnabled;
+
+    if (autoplayEnabled) {
+      // Restart from the beginning, preserving shuffle state.
+      _wantPlaying = true;
+      if (_isShuffled) {
+        _queue.shuffle();
+        queue.add(_queue.map(_songToMediaItem).toList());
+      }
+      await _buildSource();
+      if (_source == null) {
+        // Source failed to rebuild — fall through to stopping.
+        _wantPlaying = false;
+        if (player.playing) await player.pause();
+        playbackState.add(playbackState.value.copyWith(
+          playing: false,
+          processingState: AudioProcessingState.completed,
+          controls: [
+            MediaControl.skipToPrevious,
+            MediaControl.play,
+            MediaControl.skipToNext,
+          ],
+          updatePosition: player.duration ?? Duration.zero,
+          bufferedPosition: player.bufferedPosition,
+          systemActions: {MediaAction.seek},
+          androidCompactActionIndices: const [0, 1, 2],
+        ));
+        return;
+      }
+      await player.setAudioSource(_source!, initialIndex: 0, initialPosition: Duration.zero);
+      await player.play();
+      _emitCurrentSong();
+      return;
+    }
+
     // Make the actual player state match the emitted "completed" state.
     // Natural queue end already has the player stopped; a manual next-at-end
     // would otherwise keep audio playing behind a "stopped" notification.

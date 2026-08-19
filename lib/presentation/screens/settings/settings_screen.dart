@@ -145,13 +145,13 @@ class SettingsScreen extends ConsumerWidget {
           ),
           _buildSection(
             context,
-            'Notifications',
+            'Playback',
             [
               SwitchListTile(
-                title: const Text('Ongoing Notification'),
-                subtitle: const Text('Keep notification visible while playing'),
-                value: settings.notificationOngoing,
-                onChanged: (value) => notifier.toggleNotificationOngoing(value),
+                title: const Text('Autoplay'),
+                subtitle: const Text('Continue playing after the playlist ends'),
+                value: settings.autoplayEnabled,
+                onChanged: (value) => notifier.toggleAutoplay(value),
               ),
               SwitchListTile(
                 title: const Text('Dismiss on Pause'),

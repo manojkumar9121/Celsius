@@ -146,6 +146,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
     HiveStorage.saveSettings(state);
   }
 
+  void toggleAutoplay(bool value) {
+    state = state.copyWith(autoplayEnabled: value);
+    HiveStorage.saveSettings(state);
+  }
+
   Future<void> removeManagedFolder(String path) async {
     await HiveStorage.removeManagedFolder(path);
     state = HiveStorage.getSettings();

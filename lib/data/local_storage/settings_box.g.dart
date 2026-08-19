@@ -32,13 +32,14 @@ class SettingsBoxAdapter extends TypeAdapter<SettingsBox> {
       ..accentColor = fields[12] as String?
       ..showMediaNotification = fields[14] == null ? true : fields[14] as bool
       ..notificationOngoing = fields[15] == null ? true : fields[15] as bool
-      ..stopOnPause = fields[16] == null ? true : fields[16] as bool;
+      ..stopOnPause = fields[16] == null ? true : fields[16] as bool
+      ..autoplayEnabled = fields[17] == null ? true : fields[17] as bool;
   }
 
   @override
   void write(BinaryWriter writer, SettingsBox obj) {
     writer
-      ..writeByte(16)
+      ..writeByte(17)
       ..writeByte(0)
       ..write(obj.themePreset)
       ..writeByte(1)
@@ -70,7 +71,9 @@ class SettingsBoxAdapter extends TypeAdapter<SettingsBox> {
       ..writeByte(15)
       ..write(obj.notificationOngoing)
       ..writeByte(16)
-      ..write(obj.stopOnPause);
+      ..write(obj.stopOnPause)
+      ..writeByte(17)
+      ..write(obj.autoplayEnabled);
   }
 
   @override

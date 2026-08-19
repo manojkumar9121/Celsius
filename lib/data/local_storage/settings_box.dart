@@ -55,6 +55,9 @@ class SettingsBox extends HiveObject {
   @HiveField(16, defaultValue: true)
   late bool stopOnPause;
 
+  @HiveField(17, defaultValue: true)
+  late bool autoplayEnabled;
+
   AppSettings toSettings() {
     final themePresetIndex = themePreset.clamp(0, ThemePreset.values.length - 1);
     final repeatModeIndex = defaultRepeatMode.clamp(0, AppSettingsRepeatMode.values.length - 1);
@@ -76,6 +79,7 @@ class SettingsBox extends HiveObject {
       showMediaNotification: showMediaNotification,
       notificationOngoing: notificationOngoing,
       stopOnPause: stopOnPause,
+      autoplayEnabled: autoplayEnabled,
     );
   }
 
@@ -97,6 +101,7 @@ class SettingsBox extends HiveObject {
     box.showMediaNotification = settings.showMediaNotification;
     box.notificationOngoing = settings.notificationOngoing;
     box.stopOnPause = settings.stopOnPause;
+    box.autoplayEnabled = settings.autoplayEnabled;
     return box;
   }
 }
