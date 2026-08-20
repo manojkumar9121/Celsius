@@ -18,8 +18,23 @@ A sleek offline music player for Android that plays your local music library —
 - **Now Playing** — full-screen player with artwork, colors extracted from the album art, and a mini player on every tab
 - **Lyrics** — timed lyrics view for the current track
 - **Stats** — listening statistics for your library
-- **Themes** — light, dark, and a set of custom color presets (Ocean, Nord, Rose Pine, Matrix, Cyberpunk, Custom)
+- **Themes** — system, light, dark, and color presets (Riso Zine, Nord, Paper Press, Matrix, Pocket LCD, Custom), plus four Now Playing skins (Classic, Riso Zine, Paper Press, Pocket LCD) with their own fonts and artwork treatments
 - **Offline-first** — all data (library, playlists, settings) is persisted locally with Hive
+
+## Themes
+
+**App presets** — pick one in *Settings → Theme Preset*: System, Light, Dark, Riso Zine, Nord, Paper Press, Matrix, Pocket LCD, or Custom (pick your own primary + accent colors).
+
+**Now Playing skins** — pick one in *Settings → Appearance → Now Playing Theme*:
+
+| Skin | Look |
+| --- | --- |
+| Classic | Original dark design — blurred artwork with dominant-color accents (default) |
+| Riso Zine | Cream risograph print: halftone patches, pink/blue inks, star badge, Archivo Black |
+| Paper Press | Warm paper zine: grain + vignette, tape corners, brick-red ink, Playfair Display |
+| Pocket LCD | Handheld dot-matrix: olive screen, pixel grid, LCD seek bar, VT323 / Press Start 2P |
+
+Choosing a matching app preset (Riso Zine, Paper Press, or Pocket LCD) switches the Now Playing skin to match automatically — the skin stays independently adjustable afterwards.
 
 ## Tech stack
 
