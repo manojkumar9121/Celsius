@@ -19,13 +19,13 @@ final themeModeProvider = Provider<ThemeMode>((ref) {
       // light-mode devices and make the chosen color look "forgotten".
       return ThemeMode.dark;
     case ThemePreset.light:
+    case ThemePreset.risoZine:
+    case ThemePreset.paperPress:
+    case ThemePreset.pocketLcd:
       return ThemeMode.light;
     case ThemePreset.dark:
-    case ThemePreset.ocean:
     case ThemePreset.nord:
-    case ThemePreset.rosePine:
     case ThemePreset.matrix:
-    case ThemePreset.cyberpunk:
       return ThemeMode.dark;
   }
 });
@@ -42,16 +42,16 @@ ThemeData _buildThemeData(AppSettings settings) {
   switch (settings.themePreset) {
     case ThemePreset.light:
       return _lightTheme;
-    case ThemePreset.ocean:
-      return _oceanTheme;
+    case ThemePreset.risoZine:
+      return _risoZineTheme;
     case ThemePreset.nord:
       return _nordTheme;
-    case ThemePreset.rosePine:
-      return _rosePineTheme;
+    case ThemePreset.paperPress:
+      return _paperPressTheme;
     case ThemePreset.matrix:
       return _matrixTheme;
-    case ThemePreset.cyberpunk:
-      return _cyberpunkTheme;
+    case ThemePreset.pocketLcd:
+      return _pocketLcdTheme;
     default:
       return _darkTheme;
   }
@@ -66,8 +66,29 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
   }
 
   void setThemePreset(ThemePreset preset) {
-    state = state.copyWith(themePreset: preset);
+    state = state.copyWith(
+      themePreset: preset,
+      // Matching presets also switch the Now Playing skin so the whole app
+      // feels consistent. The Now Playing setting stays independently
+      // adjustable afterwards.
+      nowPlayingTheme: _matchingNowPlayingTheme(preset) ?? state.nowPlayingTheme,
+    );
     HiveStorage.saveSettings(state);
+  }
+
+  /// The Now Playing skin paired with [preset], or null when the preset has
+  /// no matching skin (classic remains whatever the user chose).
+  static NowPlayingTheme? _matchingNowPlayingTheme(ThemePreset preset) {
+    switch (preset) {
+      case ThemePreset.risoZine:
+        return NowPlayingTheme.risoZine;
+      case ThemePreset.paperPress:
+        return NowPlayingTheme.paperPress;
+      case ThemePreset.pocketLcd:
+        return NowPlayingTheme.pocketLcd;
+      default:
+        return null;
+    }
   }
 
   void setPrimaryColor(Color color) {
@@ -123,6 +144,11 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
 
   void setWaveformAnimationSpeed(double speed) {
     state = state.copyWith(waveformAnimationSpeed: speed);
+    HiveStorage.saveSettings(state);
+  }
+
+  void setNowPlayingTheme(NowPlayingTheme theme) {
+    state = state.copyWith(nowPlayingTheme: theme);
     HiveStorage.saveSettings(state);
   }
 
@@ -193,12 +219,17 @@ final _darkTheme = ThemeData.dark().copyWith(
   cardTheme: const CardThemeData(color: Color(0xFF1E1E1E)),
 );
 
-final _oceanTheme = ThemeData.dark().copyWith(
-  brightness: Brightness.dark,
-  colorScheme: const ColorScheme.dark(primary: Color(0xFF4facfe), secondary: Color(0xFF00f2fe)),
-  scaffoldBackgroundColor: const Color(0xFF0d2b45),
-  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF0d2b45)),
-  cardTheme: const CardThemeData(color: Color(0xFF1a3a5c)),
+/// Riso Zine: cream paper, blue + pink risograph inks.
+final _risoZineTheme = ThemeData.light().copyWith(
+  brightness: Brightness.light,
+  colorScheme: const ColorScheme.light(
+    primary: Color(0xFF0078BF),
+    secondary: Color(0xFFFF48B0),
+    tertiary: Color(0xFF16151A),
+  ),
+  scaffoldBackgroundColor: const Color(0xFFF5F1E8),
+  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFFF5F1E8)),
+  cardTheme: const CardThemeData(color: Color(0xFFFFFFFF)),
 );
 
 final _nordTheme = ThemeData.dark().copyWith(
@@ -209,12 +240,16 @@ final _nordTheme = ThemeData.dark().copyWith(
   cardTheme: const CardThemeData(color: Color(0xFF3B4252)),
 );
 
-final _rosePineTheme = ThemeData.dark().copyWith(
-  brightness: Brightness.dark,
-  colorScheme: const ColorScheme.dark(primary: Color(0xFFEA9A97), secondary: Color(0xFFD9D9D9)),
-  scaffoldBackgroundColor: const Color(0xFF1F1821),
-  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF1F1821)),
-  cardTheme: const CardThemeData(color: Color(0xFF261F28)),
+/// Paper Press: warm paper cream, brick-red ink.
+final _paperPressTheme = ThemeData.light().copyWith(
+  brightness: Brightness.light,
+  colorScheme: const ColorScheme.light(
+    primary: Color(0xFFC2452D),
+    secondary: Color(0xFF1C1A17),
+  ),
+  scaffoldBackgroundColor: const Color(0xFFF2EFE6),
+  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFFF2EFE6)),
+  cardTheme: const CardThemeData(color: Color(0xFFFFFFFF)),
 );
 
 final _matrixTheme = ThemeData.dark().copyWith(
@@ -246,31 +281,32 @@ final _matrixTheme = ThemeData.dark().copyWith(
   ),
 );
 
-final _cyberpunkTheme = ThemeData.dark().copyWith(
-  brightness: Brightness.dark,
-  colorScheme: const ColorScheme.dark(
-    primary: Color(0xFFFF0090),
-    secondary: Color(0xFF00F0FF),
-    surface: Color(0xFF120025),
+/// Pocket LCD: olive screen, dark-green LCD ink.
+final _pocketLcdTheme = ThemeData.light().copyWith(
+  brightness: Brightness.light,
+  colorScheme: const ColorScheme.light(
+    primary: Color(0xFF0F380F),
+    secondary: Color(0xFF306230),
+    surface: Color(0xFF8BAC0F),
   ),
-  scaffoldBackgroundColor: const Color(0xFF0a0012),
-  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF0a0012)),
-  cardTheme: const CardThemeData(color: Color(0xFF180030)),
+  scaffoldBackgroundColor: const Color(0xFF9BBC0F),
+  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF9BBC0F)),
+  cardTheme: const CardThemeData(color: Color(0xFF8BAC0F)),
   textTheme: const TextTheme(
-    bodyLarge: TextStyle(color: Color(0xFFFF0090)),
-    bodyMedium: TextStyle(color: Color(0xFFFF0090)),
-    bodySmall: TextStyle(color: Color(0xFF00F0FF)),
-    titleLarge: TextStyle(color: Color(0xFFFF0090)),
-    titleMedium: TextStyle(color: Color(0xFFFF0090)),
+    bodyLarge: TextStyle(color: Color(0xFF0F380F)),
+    bodyMedium: TextStyle(color: Color(0xFF0F380F)),
+    bodySmall: TextStyle(color: Color(0xFF306230)),
+    titleLarge: TextStyle(color: Color(0xFF0F380F)),
+    titleMedium: TextStyle(color: Color(0xFF0F380F)),
   ),
-  iconTheme: const IconThemeData(color: Color(0xFF00F0FF)),
+  iconTheme: const IconThemeData(color: Color(0xFF0F380F)),
   listTileTheme: const ListTileThemeData(
-    textColor: Color(0xFFFF0090),
-    iconColor: Color(0xFF00F0FF),
+    textColor: Color(0xFF0F380F),
+    iconColor: Color(0xFF306230),
   ),
   appBarTheme: const AppBarTheme(
-    backgroundColor: Color(0xFF0a0012),
-    foregroundColor: Color(0xFFFF0090),
+    backgroundColor: Color(0xFF9BBC0F),
+    foregroundColor: Color(0xFF0F380F),
     elevation: 0,
   ),
 );

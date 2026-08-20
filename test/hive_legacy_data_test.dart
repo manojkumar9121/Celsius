@@ -67,7 +67,7 @@ void main() {
 
     final settings = await Hive.openBox<SettingsBox>('settings');
     await settings.put('app_settings', SettingsBox.fromSettings(const AppSettings(
-      themePreset: ThemePreset.ocean,
+      themePreset: ThemePreset.nord,
       autoplayEnabled: true,
     )));
     await settings.close();
@@ -96,7 +96,7 @@ void main() {
     expect(playlists.single.songIds, ['song_1']);
 
     // Settings survived.
-    expect(HiveStorage.getSettings().themePreset, ThemePreset.ocean);
+    expect(HiveStorage.getSettings().themePreset, ThemePreset.nord);
     expect(HiveStorage.getSettings().autoplayEnabled, isTrue);
   });
 
@@ -123,7 +123,7 @@ void main() {
 
     expect(HiveStorage.getAllSongs(), hasLength(1));
     expect(HiveStorage.getAllPlaylists(), hasLength(1));
-    expect(HiveStorage.getSettings().themePreset, ThemePreset.ocean);
+    expect(HiveStorage.getSettings().themePreset, ThemePreset.nord);
   });
 
   test('undecodable legacy settings record resets to defaults, app still starts',

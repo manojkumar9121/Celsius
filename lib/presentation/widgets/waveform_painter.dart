@@ -17,6 +17,16 @@ class WaveformPainter extends CustomPainter {
   final double maxHeight;
   final Animation<double>? animation;
 
+  /// Per-bar color cycle (themed skins: Riso pink/blue, Swiss red accent).
+  final List<Color>? barPalette;
+
+  /// Square bar caps (themed skins) instead of round caps.
+  final bool squareBars;
+
+  /// Vertical ink stripe widths inside each bar (Pocket LCD).
+  final double? stripeOn;
+  final double? stripeOff;
+
   WaveformPainter({
     required this.waveData,
     this.progress = 0.0,
@@ -30,6 +40,10 @@ class WaveformPainter extends CustomPainter {
     this.minHeight = 3.0,
     this.maxHeight = 64.0,
     this.animation,
+    this.barPalette,
+    this.squareBars = false,
+    this.stripeOn,
+    this.stripeOff,
   }) : super(repaint: animation);
 
   /// Maximum amplitude modulation applied by the pulse animation.
@@ -50,6 +64,12 @@ class WaveformPainter extends CustomPainter {
   }
 
   Color _barColor(int index, int barCount, bool isActive, double amplitude) {
+    final palette = barPalette;
+    if (palette != null && palette.isNotEmpty) {
+      final base = palette[index % palette.length];
+      if (!isActive) return base.withValues(alpha: 0.22);
+      return base.withValues(alpha: 0.6 + amplitude * 0.4);
+    }
     if (rainbow) {
       final hue = (index / barCount) * 360;
       return HSVColor.fromAHSV(isActive ? 0.9 : 0.35, hue, 0.85, 1.0).toColor();
@@ -128,7 +148,8 @@ class WaveformPainter extends CustomPainter {
   }
 
   void _paintBars(Canvas canvas, Size size) {
-    final paint = Paint()..strokeCap = StrokeCap.round;
+    final paint = Paint()
+      ..strokeCap = squareBars ? StrokeCap.butt : StrokeCap.round;
     final centerY = size.height / 2;
     final t = animation?.value ?? 0.0;
 
@@ -145,6 +166,20 @@ class WaveformPainter extends CustomPainter {
       final isActive = barProgress <= progress;
       final barColor = _barColor(i, barCount, isActive, amplitude);
 
+      final on = stripeOn;
+      if (isActive && on != null && on > 0) {
+        // Pocket LCD: fill each bar with a vertical ink-stripe shader.
+        final off = stripeOff ?? on;
+        final rect = Rect.fromLTWH(
+          x - barWidth / 2,
+          centerY - barHeight / 2,
+          barWidth,
+          barHeight,
+        );
+        canvas.drawRect(rect, Paint()..shader = _stripeShader(rect, barColor, on, off));
+        continue;
+      }
+
       paint
         ..strokeWidth = barWidth
         ..color = barColor;
@@ -155,6 +190,34 @@ class WaveformPainter extends CustomPainter {
         paint,
       );
     }
+  }
+
+  /// Vertical ink stripes: [on] px of color, [off] px transparent, repeating.
+  static Shader _stripeShader(Rect rect, Color ink, double on, double off) {
+    final colors = <Color>[];
+    final stops = <double>[];
+    double t = 0;
+    while (t < 1.0 - 1e-6) {
+      final onEnd = min(t + on / rect.height, 1.0);
+      colors
+        ..add(ink)
+        ..add(ink)
+        ..add(Colors.transparent)
+        ..add(Colors.transparent);
+      stops
+        ..add(t)
+        ..add(onEnd)
+        ..add(onEnd)
+        ..add(min(onEnd + off / rect.height, 1.0));
+      if (onEnd >= 1.0) break;
+      t = onEnd + off / rect.height;
+    }
+    return LinearGradient(
+      begin: Alignment.topCenter,
+      end: Alignment.bottomCenter,
+      colors: colors,
+      stops: stops,
+    ).createShader(rect);
   }
 
   void _paintRibbon(Canvas canvas, Size size) {
@@ -541,6 +604,10 @@ class WaveformPainter extends CustomPainter {
         oldDelegate.gradientColors != gradientColors ||
         oldDelegate.rainbow != rainbow ||
         oldDelegate.style != style ||
-        oldDelegate.waveData != waveData;
+        oldDelegate.waveData != waveData ||
+        oldDelegate.barPalette != barPalette ||
+        oldDelegate.squareBars != squareBars ||
+        oldDelegate.stripeOn != stripeOn ||
+        oldDelegate.stripeOff != stripeOff;
   }
 }

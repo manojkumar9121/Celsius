@@ -24,12 +24,19 @@ void main() {
   });
 
   group('settings persistence', () {
+    test('now playing theme survives a "restart" (re-read from storage)', () {
+      final notifier = SettingsNotifier();
+      notifier.setNowPlayingTheme(NowPlayingTheme.pocketLcd);
+      final reloaded = SettingsNotifier().state;
+      expect(reloaded.nowPlayingTheme, NowPlayingTheme.pocketLcd);
+    });
+
     test('custom color survives a "restart" (re-read from storage)', () {
       final notifier = SettingsNotifier();
-      notifier.setThemePreset(ThemePreset.ocean);
+      notifier.setThemePreset(ThemePreset.nord);
 
       final restored = HiveStorage.getSettings();
-      expect(restored.themePreset, ThemePreset.ocean);
+      expect(restored.themePreset, ThemePreset.nord);
     });
 
     test('primary color + custom preset survive a restart', () {
@@ -51,6 +58,33 @@ void main() {
       ]);
       addTearDown(container.dispose);
       expect(container.read(themeModeProvider), ThemeMode.dark);
+    });
+
+    test('matching presets auto-switch the Now Playing skin', () {
+      final notifier = SettingsNotifier();
+      notifier.setThemePreset(ThemePreset.risoZine);
+      expect(notifier.state.nowPlayingTheme, NowPlayingTheme.risoZine);
+
+      notifier.setThemePreset(ThemePreset.paperPress);
+      expect(notifier.state.nowPlayingTheme, NowPlayingTheme.paperPress);
+
+      notifier.setThemePreset(ThemePreset.pocketLcd);
+      expect(notifier.state.nowPlayingTheme, NowPlayingTheme.pocketLcd);
+
+      // Non-matching presets leave the skin untouched.
+      notifier.setNowPlayingTheme(NowPlayingTheme.classic);
+      notifier.setThemePreset(ThemePreset.nord);
+      expect(notifier.state.nowPlayingTheme, NowPlayingTheme.classic);
+    });
+
+    test('matching presets map to light mode (cream/olive backgrounds)', () {
+      final container = ProviderContainer(overrides: [
+        settingsProvider.overrideWith(
+          (ref) => SettingsNotifier()..setThemePreset(ThemePreset.paperPress),
+        ),
+      ]);
+      addTearDown(container.dispose);
+      expect(container.read(themeModeProvider), ThemeMode.light);
     });
   });
 

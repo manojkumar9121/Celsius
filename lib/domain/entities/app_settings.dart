@@ -1,12 +1,19 @@
+/// Skins for the Now Playing screen. [classic] is the original dark +
+/// dominant-color design and remains the default.
+enum NowPlayingTheme { classic, risoZine, paperPress, pocketLcd }
+
+/// App-wide color presets. The zine/LCD presets mirror the matching
+/// [NowPlayingTheme] skins (and auto-select them when chosen). Values are
+/// persisted by index — keep the order stable.
 enum ThemePreset {
   system,
   light,
   dark,
-  ocean,
+  risoZine,
   nord,
-  rosePine,
+  paperPress,
   matrix,
-  cyberpunk,
+  pocketLcd,
   custom,
 }
 
@@ -24,6 +31,7 @@ class AppSettings {
   final String waveformColor;
   final WaveformStyle waveformStyle;
   final double waveformAnimationSpeed;
+  final NowPlayingTheme nowPlayingTheme;
   final bool showMediaNotification;
   final bool notificationOngoing;
   final bool stopOnPause;
@@ -43,6 +51,7 @@ class AppSettings {
     this.waveformColor = '#4ade80',
     this.waveformStyle = WaveformStyle.bars,
     this.waveformAnimationSpeed = 1.0,
+    this.nowPlayingTheme = NowPlayingTheme.classic,
     this.showMediaNotification = true,
     this.notificationOngoing = true,
     this.stopOnPause = true,
@@ -63,6 +72,7 @@ class AppSettings {
     String? waveformColor,
     WaveformStyle? waveformStyle,
     double? waveformAnimationSpeed,
+    NowPlayingTheme? nowPlayingTheme,
     bool? showMediaNotification,
     bool? notificationOngoing,
     bool? stopOnPause,
@@ -82,6 +92,7 @@ class AppSettings {
       waveformColor: waveformColor ?? this.waveformColor,
       waveformStyle: waveformStyle ?? this.waveformStyle,
       waveformAnimationSpeed: waveformAnimationSpeed ?? this.waveformAnimationSpeed,
+      nowPlayingTheme: nowPlayingTheme ?? this.nowPlayingTheme,
       showMediaNotification: showMediaNotification ?? this.showMediaNotification,
       notificationOngoing: notificationOngoing ?? this.notificationOngoing,
       stopOnPause: stopOnPause ?? this.stopOnPause,
@@ -104,6 +115,7 @@ class AppSettings {
       'waveformColor': waveformColor,
       'waveformStyle': waveformStyle.index,
       'waveformAnimationSpeed': waveformAnimationSpeed,
+      'nowPlayingTheme': nowPlayingTheme.index,
       'showMediaNotification': showMediaNotification,
       'notificationOngoing': notificationOngoing,
       'stopOnPause': stopOnPause,
@@ -136,6 +148,8 @@ class AppSettings {
       waveformAnimationSpeed: json['waveformAnimationSpeed'] is num
           ? (json['waveformAnimationSpeed'] as num).toDouble()
           : 1.0,
+      nowPlayingTheme: _enumFromIndex<NowPlayingTheme>(
+          json['nowPlayingTheme'], NowPlayingTheme.values, NowPlayingTheme.classic),
       showMediaNotification: json['showMediaNotification'] != false,
       notificationOngoing: json['notificationOngoing'] != false,
       stopOnPause: json['stopOnPause'] != false,

@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:celsuis/presentation/providers/settings_provider.dart';
 import 'package:celsuis/presentation/providers/library_provider.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
+import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
 import 'package:celsuis/core/utils/color_utils.dart';
 
 class SettingsScreen extends ConsumerWidget {
@@ -71,6 +72,21 @@ class SettingsScreen extends ConsumerWidget {
                   },
                 ),
               ],
+              ListTile(
+                leading: const Icon(Icons.music_note),
+                title: const Text('Now Playing Theme'),
+                trailing: Text(settings.nowPlayingTheme.name),
+                onTap: () async {
+                  final selected = await showDialog<NowPlayingTheme>(
+                    context: context,
+                    builder: (ctx) =>
+                        NowPlayingThemePicker(initial: settings.nowPlayingTheme),
+                  );
+                  if (selected != null && context.mounted) {
+                    notifier.setNowPlayingTheme(selected);
+                  }
+                },
+              ),
             ],
           ),
           _buildSection(
@@ -211,16 +227,16 @@ class SettingsScreen extends ConsumerWidget {
         return 'Light';
       case ThemePreset.dark:
         return 'Dark';
-      case ThemePreset.ocean:
-        return 'Ocean';
+      case ThemePreset.risoZine:
+        return 'Riso Zine';
       case ThemePreset.nord:
         return 'Nord';
-      case ThemePreset.rosePine:
-        return 'Rose Pine';
+      case ThemePreset.paperPress:
+        return 'Paper Press';
       case ThemePreset.matrix:
         return 'Matrix';
-      case ThemePreset.cyberpunk:
-        return 'Cyberpunk';
+      case ThemePreset.pocketLcd:
+        return 'Pocket LCD';
       case ThemePreset.custom:
         return 'Custom';
     }
@@ -612,6 +628,36 @@ class WaveformStylePicker extends StatelessWidget {
             return RadioListTile<WaveformStyle>(
               title: Text(style.name),
               value: style,
+            );
+          }).toList(),
+        ),
+      ),
+    );
+  }
+}
+
+class NowPlayingThemePicker extends StatelessWidget {
+  final NowPlayingTheme initial;
+
+  const NowPlayingThemePicker({required this.initial, super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Now Playing Theme'),
+      content: RadioGroup<NowPlayingTheme>(
+        groupValue: initial,
+        onChanged: (value) {
+          if (value != null) Navigator.pop(context, value);
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: NowPlayingTheme.values.map((theme) {
+            final spec = nowPlayingThemeSpecs[theme]!;
+            return RadioListTile<NowPlayingTheme>(
+              title: Text(spec.label),
+              subtitle: Text(spec.description),
+              value: theme,
             );
           }).toList(),
         ),

@@ -14,6 +14,19 @@ class WaveformViewer extends ConsumerStatefulWidget {
   final double height;
   final bool showTimestamps;
 
+  /// Per-bar color cycle (themed skins).
+  final List<Color>? barPalette;
+
+  /// Square bar caps (themed skins).
+  final bool squareBars;
+
+  /// Vertical ink stripes inside bars (Pocket LCD).
+  final double? stripeOn;
+  final double? stripeOff;
+
+  /// Overrides the default 2.0 bar gap (themed skins).
+  final double? barGap;
+
   const WaveformViewer({
     this.waveData,
     this.activeColor,
@@ -22,6 +35,11 @@ class WaveformViewer extends ConsumerStatefulWidget {
     this.rainbow = false,
     this.height = 56,
     this.showTimestamps = true,
+    this.barPalette,
+    this.squareBars = false,
+    this.stripeOn,
+    this.stripeOff,
+    this.barGap,
     super.key,
   });
 
@@ -110,7 +128,12 @@ class _WaveformViewerState extends ConsumerState<WaveformViewer>
               style: drawStyle,
               rainbow: widget.rainbow,
               barWidth: drawStyle == WaveformDrawStyle.radial ? 2.0 : 3.0,
-              barSpacing: drawStyle == WaveformDrawStyle.radial ? 1.0 : 2.0,
+              barSpacing: widget.barGap ??
+                  (drawStyle == WaveformDrawStyle.radial ? 1.0 : 2.0),
+              barPalette: widget.barPalette,
+              squareBars: widget.squareBars,
+              stripeOn: widget.stripeOn,
+              stripeOff: widget.stripeOff,
               animation: playerState.isPlaying ? _animation : null,
             ),
           ),

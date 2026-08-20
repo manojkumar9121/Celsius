@@ -12,8 +12,9 @@ import 'package:celsuis/domain/entities/song_entity.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
 import 'package:celsuis/core/utils/color_utils.dart';
 import 'package:celsuis/presentation/widgets/waveform_viewer.dart';
+import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsuis/presentation/themes/now_playing_theme_widgets.dart';
 import 'package:celsuis/services/waveform_extractor_service.dart';
-import 'package:celsuis/core/widgets/cached_song_image.dart';
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
   const NowPlayingScreen({super.key});
@@ -62,6 +63,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     final playerState = ref.watch(audioPlayerProvider);
     final song = playerState.currentSong;
     final theme = Theme.of(context);
+    final spec = ref.watch(nowPlayingThemeSpecProvider);
 
     if (song == null) {
       return Scaffold(
@@ -72,14 +74,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
 
     final avgColor = _dominantColorFor(song, theme.colorScheme.primary);
     final accentColor = theme.colorScheme.primary;
-    final textColor = Colors.white;
     _ensureWaveformLoaded(song);
     _preloadUpcomingWaveforms(playerState, song);
 
     return Theme(
       data: theme.copyWith(
         iconButtonTheme: IconButtonThemeData(
-          style: IconButton.styleFrom(foregroundColor: textColor),
+          style: IconButton.styleFrom(foregroundColor: spec.iconColor),
         ),
       ),
       child: GestureDetector(
@@ -89,11 +90,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
           }
         },
         child: Scaffold(
-          backgroundColor: Colors.black,
+          backgroundColor: spec.backgroundColor ?? Colors.black,
           body: Stack(
               fit: StackFit.expand,
               children: [
-                _buildBackground(song, avgColor),
+                NowPlayingBackground(spec: spec, song: song, avgColor: avgColor),
                 SafeArea(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
@@ -105,21 +106,21 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
                         child: IntrinsicHeight(
                           child: Column(
                             children: [
-                              _buildTopBar(context, textColor),
+                              _buildTopBar(context, spec),
                               const SizedBox(height: 8),
-                              _buildAlbumArt(song, artSize),
+                              _buildAlbumArt(song, artSize, playerState),
                               const SizedBox(height: 20),
-                              _buildSongInfo(song, textColor),
+                              _buildSongInfo(song, spec, playerState.isPlaying),
                               const SizedBox(height: 12),
-                              _buildActionBar(song, accentColor, textColor),
+                              _buildActionBar(song, accentColor, spec),
                               const SizedBox(height: 4),
-                              _buildSeekBar(playerState, accentColor, textColor),
+                              _buildSeekBar(playerState, accentColor, spec),
                               const SizedBox(height: 4),
-                              _buildTransportControls(playerState, accentColor, textColor),
+                              _buildTransportControls(playerState, accentColor, spec),
                               const SizedBox(height: 12),
-                              _buildWaveform(song),
+                              _buildWaveform(song, spec),
                               const SizedBox(height: 8),
-                              _buildBottomNavigation(textColor),
+                              _buildBottomNavigation(spec),
                             ],
                           ),
                         ),
@@ -135,7 +136,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildWaveform(SongEntity song) {
+  Widget _buildWaveform(SongEntity song, NowPlayingThemeSpec spec) {
     final settings = ref.watch(settingsProvider);
 
     final hasArt = song.coverArtPath != null &&
@@ -151,7 +152,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     Color? inactiveColor;
     List<Color>? gradient;
 
-    if (customColor != null) {
+    if (spec.waveformPalette != null) {
+      // Themed skins use their fixed palette instead of artwork colors.
+      rainbow = false;
+      activeColor = spec.waveformActiveColor;
+      inactiveColor = spec.waveformInactiveColor;
+      gradient = null;
+    } else if (customColor != null) {
       rainbow = false;
       activeColor = customColor;
       inactiveColor = customColor.withValues(alpha: 0.3);
@@ -185,6 +192,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
           rainbow: rainbow,
           height: 48,
           showTimestamps: false,
+          barPalette: spec.waveformPalette,
+          squareBars: spec.waveformSquareBars,
+          stripeOn: spec.waveformStripes ? 3 : null,
+          stripeOff: spec.waveformStripes ? 2 : null,
+          barGap: spec.waveformBarGap,
         ),
       ),
     );
@@ -241,63 +253,40 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     return hsl.withLightness(lightness).toColor();
   }
 
-  Widget _buildBackground(SongEntity song, Color avgColor) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (song.coverArtPath != null && File(song.coverArtPath!).existsSync())
-          ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-            child: Image.file(
-              File(song.coverArtPath!),
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(color: avgColor),
-            ),
-          )
-        else
-          Container(color: avgColor),
-        Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.black.withValues(alpha: 0.5),
-                Colors.black.withValues(alpha: 0.65),
-                Colors.black.withValues(alpha: 0.85),
-                Colors.black,
-              ],
-              stops: const [0.0, 0.35, 0.7, 1.0],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context, Color textColor) {
+  Widget _buildTopBar(BuildContext context, NowPlayingThemeSpec spec) {
+    final iconColor = spec.iconColor;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: Icon(Icons.keyboard_arrow_down, color: textColor, size: 28),
+            icon: Icon(Icons.keyboard_arrow_down, color: iconColor, size: 28),
             onPressed: () async {
               await HapticFeedback.lightImpact();
               if (!context.mounted) return;
               Navigator.pop(context);
             },
           ),
+          if (spec.topLabel != null)
+            Expanded(
+              child: Text(
+                spec.topLabel!,
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: spec.topLabelStyle,
+              ),
+            ),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: Icon(Icons.queue_music, color: textColor.withValues(alpha: 0.7), size: 20),
+                icon: Icon(Icons.queue_music, color: iconColor.withValues(alpha: 0.7), size: 20),
                 onPressed: () => context.push('/queue'),
               ),
               IconButton(
-                icon: Icon(Icons.timer_outlined, color: textColor.withValues(alpha: 0.7), size: 20),
+                icon: Icon(Icons.timer_outlined, color: iconColor.withValues(alpha: 0.7), size: 20),
                 onPressed: _showSleepTimerDialog,
               ),
             ],
@@ -307,10 +296,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildAlbumArt(SongEntity song, double artSize) {
-    final hasArt = song.coverArtPath != null &&
-        song.coverArtPath!.isNotEmpty &&
-        File(song.coverArtPath!).existsSync();
+  Widget _buildAlbumArt(SongEntity song, double artSize, AudioPlayerState playerState) {
+    final queueIndex = playerState.queue.indexWhere((s) => s.id == song.id);
 
     return GestureDetector(
       onHorizontalDragEnd: (details) {
@@ -327,38 +314,19 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
       child: Center(
         child: AnimatedSwitcher(
           duration: const Duration(milliseconds: 400),
-          child: Container(
+          child: NowPlayingArtFrame(
             key: ValueKey('${song.id}:${song.coverArtPath}'),
-            width: artSize,
-            height: artSize,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.3),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: hasArt
-                  ? Image.file(
-                      File(song.coverArtPath!),
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => _artPlaceholder(artSize, song),
-                    )
-                  : _artPlaceholder(artSize, song),
-            ),
+            spec: ref.watch(nowPlayingThemeSpecProvider),
+            song: song,
+            size: artSize,
+            queueIndex: queueIndex < 0 ? null : queueIndex,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildSongInfo(SongEntity song, Color textColor) {
-    final subtextColor = textColor.withValues(alpha: 0.6);
+  Widget _buildSongInfo(SongEntity song, NowPlayingThemeSpec spec, bool isPlaying) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Row(
@@ -370,21 +338,21 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
               children: [
                 Text(
                   song.title,
-                  style: TextStyle(
-                    color: textColor,
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: spec.titleStyle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   song.artist,
-                  style: TextStyle(color: subtextColor, fontSize: 15),
+                  style: spec.artistStyle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
+                if (spec.showPlayStatus) ...[
+                  const SizedBox(height: 2),
+                  LcdStatusLine(playing: isPlaying),
+                ],
               ],
             ),
           ),
@@ -393,7 +361,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildActionBar(SongEntity song, Color accentColor, Color textColor) {
+  Widget _buildActionBar(SongEntity song, Color accentColor, NowPlayingThemeSpec spec) {
+    final heartColor = spec.pillHeartColor ??
+        (song.isFavorite ? accentColor : spec.pillTextColor);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Row(
@@ -401,8 +371,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
         children: [
           _buildPillButton(
             icon: song.isFavorite ? Icons.favorite : Icons.favorite_border,
-            color: song.isFavorite ? accentColor : textColor.withValues(alpha: 0.7),
+            color: heartColor,
             label: 'Favorite',
+            spec: spec,
             onTap: () async {
               await HapticFeedback.lightImpact();
               final newFav = !song.isFavorite;
@@ -413,8 +384,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
           const SizedBox(width: 12),
           _buildPillButton(
             icon: Icons.playlist_add,
-            color: textColor.withValues(alpha: 0.7),
+            color: spec.pillHeartColor == null
+                ? spec.pillTextColor
+                : spec.pillTextColor.withValues(alpha: 0.7),
             label: 'Save',
+            spec: spec,
             onTap: () async {
               await HapticFeedback.lightImpact();
               if (!mounted) return;
@@ -431,15 +405,23 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     required Color color,
     required String label,
     required VoidCallback onTap,
+    required NowPlayingThemeSpec spec,
   }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
-          color: Colors.black.withValues(alpha: 0.25),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.3)),
+          color: spec.pillBackgroundColor,
+          borderRadius: BorderRadius.circular(spec.pillRadius),
+          border: Border.all(
+            // Classic follows the icon color like the original design;
+            // themed skins use their fixed ink border.
+            color: (spec.pillHeartColor == null ? color : spec.pillBorderColor)
+                .withValues(alpha: spec.pillBorderAlpha),
+            width: spec.pillBorderWidth,
+          ),
+          boxShadow: spec.pillShadows,
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -448,10 +430,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             const SizedBox(width: 8),
             Text(
               label,
-              style: TextStyle(
-                color: color.withValues(alpha: 0.9),
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
+              style: (spec.pillTextStyle ?? const TextStyle()).merge(
+                TextStyle(
+                  color: (spec.pillHeartColor == null ? color : spec.pillTextColor)
+                      .withValues(alpha: 0.9),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
             ),
           ],
@@ -460,7 +445,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildSeekBar(AudioPlayerState playerState, Color accentColor, Color textColor) {
+  Widget _buildSeekBar(AudioPlayerState playerState, Color accentColor, NowPlayingThemeSpec spec) {
     final total = playerState.totalDuration;
     final position = playerState.position;
     final preview = _seekDragValue;
@@ -476,15 +461,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
           SizedBox(
             height: 32,
             child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 2,
-                thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
-                overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
-                activeTrackColor: textColor,
-                inactiveTrackColor: textColor.withValues(alpha: 0.15),
-                thumbColor: textColor,
-                overlayColor: Colors.transparent,
-              ),
+              data: spec.sliderTheme() ??
+                  SliderThemeData(
+                    trackHeight: 2,
+                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
+                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
+                    activeTrackColor: Colors.white,
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
+                    thumbColor: Colors.white,
+                    overlayColor: Colors.transparent,
+                  ),
               child: Slider(
                 value: progress.clamp(0.0, 1.0),
                 onChanged: (value) => setState(() => _seekDragValue = value),
@@ -501,14 +487,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  _formatDuration(position),
-                  style: TextStyle(color: textColor, fontSize: 12),
-                ),
-                Text(
-                  _formatDuration(total),
-                  style: TextStyle(color: textColor, fontSize: 12),
-                ),
+                Text(_formatDuration(position), style: spec.timeStyle),
+                Text(_formatDuration(total), style: spec.timeStyle),
               ],
             ),
           ),
@@ -517,14 +497,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildTransportControls(AudioPlayerState playerState, Color accentColor, Color textColor) {
+  Widget _buildTransportControls(AudioPlayerState playerState, Color accentColor, NowPlayingThemeSpec spec) {
+    final iconColor = spec.transportColor;
+    final activeColor = spec.transportActiveColor ?? accentColor;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton(
-            icon: Icon(Icons.shuffle_rounded, color: playerState.isShuffled ? accentColor : textColor.withValues(alpha: 0.6), size: 20),
+            icon: Icon(Icons.shuffle_rounded, color: playerState.isShuffled ? activeColor : iconColor.withValues(alpha: 0.6), size: 20),
             onPressed: () async {
               await HapticFeedback.lightImpact();
               ref.read(audioPlayerProvider.notifier).setShuffle(!playerState.isShuffled);
@@ -532,7 +514,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
           ),
           const SizedBox(width: 8),
           IconButton(
-            icon: Icon(Icons.skip_previous_rounded, color: textColor, size: 30),
+            icon: Icon(Icons.skip_previous_rounded, color: iconColor, size: 30),
             onPressed: () async {
               await HapticFeedback.lightImpact();
               ref.read(audioPlayerProvider.notifier).skipToPrevious();
@@ -551,23 +533,21 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
               );
             },
             child: Container(
-              width: 68,
-              height: 68,
+              width: spec.playSize,
+              height: spec.playSize,
               decoration: BoxDecoration(
-                color: textColor,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(
-                    color: textColor.withValues(alpha: 0.3),
-                    blurRadius: 16,
-                  ),
-                ],
+                color: spec.playBackgroundColor,
+                shape: spec.playRadius == null ? BoxShape.circle : BoxShape.rectangle,
+                borderRadius: spec.playRadius == null
+                    ? null
+                    : BorderRadius.circular(spec.playRadius!),
+                boxShadow: spec.playShadows,
               ),
               child: IconButton(
                 icon: Icon(
                   playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                  color: Colors.black,
-                  size: 40,
+                  color: spec.playForegroundColor,
+                  size: spec.playIconSize,
                 ),
                 onPressed: () async {
                   await HapticFeedback.lightImpact();
@@ -580,7 +560,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
           ),
           const SizedBox(width: 8),
           IconButton(
-            icon: Icon(Icons.skip_next_rounded, color: textColor, size: 30),
+            icon: Icon(Icons.skip_next_rounded, color: iconColor, size: 30),
             onPressed: () async {
               await HapticFeedback.lightImpact();
               ref.read(audioPlayerProvider.notifier).skipToNext();
@@ -591,8 +571,8 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             icon: Icon(
               _repeatIcon(playerState.repeatMode),
               color: playerState.repeatMode != AppSettingsRepeatMode.off
-                  ? accentColor
-                  : textColor.withValues(alpha: 0.6),
+                  ? activeColor
+                  : iconColor.withValues(alpha: 0.6),
               size: 20,
             ),
             onPressed: () async {
@@ -605,7 +585,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildBottomNavigation(Color textColor) {
+  Widget _buildBottomNavigation(NowPlayingThemeSpec spec) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       child: Row(
@@ -614,7 +594,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             child: _NavigationButton(
               title: 'Lyrics',
               icon: Icons.lyrics,
-              color: textColor,
+              spec: spec,
               onTap: () => context.push('/lyrics'),
             ),
           ),
@@ -623,7 +603,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             child: _NavigationButton(
               title: 'Full Queue',
               icon: Icons.queue_music,
-              color: textColor,
+              spec: spec,
               onTap: () => context.push('/queue'),
             ),
           ),
@@ -632,29 +612,12 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             child: _NavigationButton(
               title: 'Playlist',
               icon: Icons.playlist_play,
-              color: textColor,
+              spec: spec,
               onTap: () => context.push('/playlist'),
             ),
           ),
         ],
       ),
-    );
-  }
-
-  Widget _artPlaceholder(double size, SongEntity song) {
-    final color = hashToColor(song.id);
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [color, color.withValues(alpha: 0.5)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Icon(Icons.music_note, size: size * 0.3, color: Colors.white.withValues(alpha: 0.7)),
     );
   }
 
@@ -826,25 +789,29 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
 class _NavigationButton extends StatelessWidget {
   final String title;
   final IconData icon;
-  final Color color;
+  final NowPlayingThemeSpec spec;
   final VoidCallback onTap;
 
   const _NavigationButton({
     required this.title,
     required this.icon,
-    required this.color,
+    required this.spec,
     required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final color = spec.navTextColor;
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(12),
+          color: spec.navBackgroundColor,
+          borderRadius: BorderRadius.circular(spec.navRadius),
+          border: spec.navBorderColor == Colors.transparent
+              ? null
+              : Border.all(color: spec.navBorderColor),
         ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -853,7 +820,9 @@ class _NavigationButton extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               title,
-              style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w500),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: spec.navTextStyle.copyWith(color: color),
             ),
           ],
         ),
