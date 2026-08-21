@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:celsuis/core/widgets/cached_song_image.dart';
+import 'package:celsuis/domain/entities/app_settings.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
 import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
 
@@ -135,6 +136,12 @@ class _NowPlayingBackgroundState extends State<NowPlayingBackground>
               ),
             BackgroundLayer.pixelGrid => const CustomPaint(
                 painter: PixelGridPainter(ink: Color(0xFF0F380F)),
+              ),
+            BackgroundLayer.concreteGrain => CustomPaint(
+                painter: ConcreteGrainPainter(watermark: spec.iconColor),
+              ),
+            BackgroundLayer.sumiWash => CustomPaint(
+                painter: SumiWashPainter(ink: spec.iconColor),
               ),
             BackgroundLayer.none => const SizedBox.shrink(),
           },
@@ -307,6 +314,74 @@ class GlarePainter extends CustomPainter {
   bool shouldRepaint(covariant GlarePainter oldDelegate) => false;
 }
 
+/// Concrete: neutral grain speckle only (no wordmark — keeps the poster
+/// background clean).
+class ConcreteGrainPainter extends CustomPainter {
+  final Color watermark;
+
+  const ConcreteGrainPainter({required this.watermark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final grain = (watermark == const Color(0xFFEDEAE2) ? Colors.white : Colors.black);
+    final rng = Random(7);
+    final dot = Paint();
+    for (int i = 0; i < 1400; i++) {
+      final x = rng.nextDouble() * size.width;
+      final y = rng.nextDouble() * size.height;
+      dot.color = grain.withValues(alpha: 0.02 + rng.nextDouble() * 0.03);
+      canvas.drawCircle(Offset(x, y), 0.5 + rng.nextDouble() * 0.6, dot);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant ConcreteGrainPainter oldDelegate) =>
+      oldDelegate.watermark != watermark;
+}
+
+/// Sumi Ink: washi fiber noise plus one faint enso (brush circle) behind the
+/// artwork zone. In dark mode ([SumiNight]) the ink is pale and the grain
+/// lightens instead of darkens.
+class SumiWashPainter extends CustomPainter {
+  final Color ink;
+
+  const SumiWashPainter({required this.ink});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final lightInk = ink.computeLuminance() > 0.5;
+    final base = lightInk ? Colors.white : Colors.black;
+
+    final rng = Random(19);
+    final dot = Paint();
+    for (int i = 0; i < 1600; i++) {
+      final x = rng.nextDouble() * size.width;
+      final y = rng.nextDouble() * size.height;
+      dot.color = base.withValues(alpha: 0.015 + rng.nextDouble() * 0.025);
+      canvas.drawCircle(Offset(x, y), 0.5 + rng.nextDouble() * 0.5, dot);
+    }
+
+    // Enso: slightly irregular ring with a brush-stroke gap on the right.
+    canvas.save();
+    canvas.translate(size.width / 2, size.height * 0.32);
+    canvas.rotate(-0.24);
+    final radius = size.width * 0.46;
+    final rect = Rect.fromCircle(center: Offset.zero, radius: radius);
+    final stroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 5
+      ..color = ink.withValues(alpha: 0.07);
+    // Draw in two arcs so the seam reads as a lifted brush.
+    canvas.drawArc(rect, -pi * 0.15, pi * 1.55, false, stroke);
+    canvas.drawArc(rect, pi * 1.52, pi * 0.28, false, stroke..strokeWidth = 4);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant SumiWashPainter oldDelegate) =>
+      oldDelegate.ink != ink;
+}
+
 // ===========================================================================
 // Art frame
 // ===========================================================================
@@ -347,6 +422,10 @@ class NowPlayingArtFrame extends StatelessWidget {
         return _paperFrame();
       case ArtFrameStyle.lcd:
         return _lcdFrame();
+      case ArtFrameStyle.concrete:
+        return _concreteFrame();
+      case ArtFrameStyle.scroll:
+        return _scrollFrame();
     }
   }
 
@@ -570,6 +649,192 @@ class NowPlayingArtFrame extends StatelessWidget {
       ],
     );
   }
+
+  // Concrete / Concrete Noir: white plate card with a thick ink border and a
+  // hard offset shadow; red track-index tag breaks the top-left corner and a
+  // barcode strip sits in the bottom-right.
+  Widget _concreteFrame() {
+    final dark = spec.id == NowPlayingTheme.concreteNoir;
+    final ink = dark ? const Color(0xFFEDEAE2) : const Color(0xFF16140F);
+    final card = dark ? const Color(0xFF232327) : const Color(0xFFFBFAF6);
+    final index = queueIndex ?? 0;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: size,
+          height: size,
+          decoration: BoxDecoration(
+            color: card,
+            border: Border.all(color: ink, width: 3),
+            boxShadow: [
+              BoxShadow(color: ink, offset: const Offset(9, 9), blurRadius: 0),
+            ],
+          ),
+          padding: const EdgeInsets.all(11),
+          child: ClipRect(child: _artContent()),
+        ),
+        Positioned(
+          top: -13,
+          left: -13,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFF3D00),
+              border: Border.all(color: ink, width: 2),
+            ),
+            child: Text(
+              'TRK_${(index + 1).toString().padLeft(2, '0')}',
+              style: TextStyle(
+                fontFamily: 'monospace',
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
+                color: card,
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          right: -3,
+          bottom: -3,
+          child: Container(
+            width: 76,
+            height: 28,
+            decoration: BoxDecoration(
+              color: card,
+              border: Border.all(color: ink, width: 2),
+            ),
+            child: CustomPaint(painter: BarcodePainter(ink: ink)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Sumi Ink / Sumi Night: hanging scroll (kakejiku) — wooden rods top and
+  // bottom, a silk mat around the artwork, and a vermillion hanko seal.
+  Widget _scrollFrame() {
+    final dark = spec.id == NowPlayingTheme.sumiNight;
+    final silk = dark ? const Color(0xFF2A2820) : const Color(0xFFE9DFC6);
+    final rodLight = dark ? const Color(0xFF4A4238) : const Color(0xFF4A4238);
+    final rodDark = dark ? const Color(0xFF181410) : const Color(0xFF2B2620);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _scrollRod(rodLight, rodDark),
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              width: size + 30,
+              padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 32),
+              decoration: BoxDecoration(
+                color: silk,
+                boxShadow: [
+                  BoxShadow(
+                    color: (dark ? Colors.black : const Color(0x33211E19))
+                        .withValues(alpha: dark ? 0.5 : 0.2),
+                    offset: const Offset(0, 12),
+                    blurRadius: 26,
+                  ),
+                ],
+              ),
+              child: SizedBox(
+                width: size,
+                height: size,
+                child: ClipRect(child: _artContent()),
+              ),
+            ),
+            Positioned(
+              right: 14,
+              bottom: 12,
+              child: Transform.rotate(
+                angle: -4 * pi / 180,
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFC93A2E),
+                    borderRadius: BorderRadius.circular(3),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x55C93A2E), blurRadius: 8),
+                    ],
+                  ),
+                  alignment: Alignment.center,
+                  child: const Text(
+                    '奏',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFFF5F1E4),
+                      height: 1.0,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        _scrollRod(rodLight, rodDark),
+      ],
+    );
+  }
+
+  Widget _scrollRod(Color light, Color dark) {
+    return Container(
+      width: size + 44,
+      height: 11,
+      margin: const EdgeInsets.symmetric(vertical: 2),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(6),
+        gradient: LinearGradient(colors: [light, dark]),
+        boxShadow: const [
+          BoxShadow(color: Color(0x55211E19), offset: Offset(0, 3), blurRadius: 7),
+        ],
+      ),
+    );
+  }
+}
+
+/// Concrete: decorative barcode strip — seeded variable-width ink lines with
+/// a tiny "CSLS" caption underneath.
+class BarcodePainter extends CustomPainter {
+  final Color ink;
+
+  const BarcodePainter({required this.ink});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rng = Random(47);
+    final line = Paint()..color = ink;
+    double x = 4;
+    while (x < size.width - 5) {
+      final w = 1.0 + rng.nextDouble() * 2.6;
+      canvas.drawLine(Offset(x, 3), Offset(x, size.height * 0.62), line);
+      x += w + 1 + rng.nextDouble() * 2;
+    }
+    // Caption row.
+    final tp = TextPainter(
+      text: TextSpan(
+        text: 'CSLS·047',
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: 7,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.2,
+          color: ink,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    );
+    tp.layout();
+    tp.paint(canvas, Offset(4, size.height - 10));
+  }
+
+  @override
+  bool shouldRepaint(covariant BarcodePainter oldDelegate) =>
+      oldDelegate.ink != ink;
 }
 
 /// Pink halftone duotone dots over the Riso artwork.

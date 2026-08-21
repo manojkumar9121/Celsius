@@ -239,6 +239,14 @@ class SettingsScreen extends ConsumerWidget {
         return 'Pocket LCD';
       case ThemePreset.custom:
         return 'Custom';
+      case ThemePreset.concrete:
+        return 'Concrete';
+      case ThemePreset.sumi:
+        return 'Sumi Ink';
+      case ThemePreset.concreteNoir:
+        return 'Concrete Noir';
+      case ThemePreset.sumiNight:
+        return 'Sumi Night';
     }
   }
 

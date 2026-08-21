@@ -18,10 +18,16 @@ enum BackgroundLayer {
 
   /// Pocket LCD: dot-matrix pixel grid overlay.
   pixelGrid,
+
+  /// Concrete: neutral grain + rotated outline watermark word.
+  concreteGrain,
+
+  /// Sumi Ink: washi fiber noise + faint enso ring.
+  sumiWash,
 }
 
 /// How the album artwork is framed on the Now Playing screen.
-enum ArtFrameStyle { classic, riso, paper, lcd }
+enum ArtFrameStyle { classic, riso, paper, lcd, concrete, scroll }
 
 /// Complete visual skin for the Now Playing screen.
 ///
@@ -228,6 +234,10 @@ final Map<NowPlayingTheme, NowPlayingThemeSpec> nowPlayingThemeSpecs = {
   NowPlayingTheme.risoZine: _risoZine,
   NowPlayingTheme.paperPress: _paperPress,
   NowPlayingTheme.pocketLcd: _pocketLcd,
+  NowPlayingTheme.concrete: _concrete,
+  NowPlayingTheme.sumi: _sumi,
+  NowPlayingTheme.concreteNoir: _concreteNoir,
+  NowPlayingTheme.sumiNight: _sumiNight,
 };
 
 // ---------------------------------------------------------------------------
@@ -427,8 +437,280 @@ const NowPlayingThemeSpec _pocketLcd = NowPlayingThemeSpec(
   navBackgroundColor: Color(0x0F0F380F),
   navBorderColor: Color(0xFF306230),
   navRadius: 6,
-  navTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 8),
-  artFrame: ArtFrameStyle.lcd,
+   navTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 8),
+   artFrame: ArtFrameStyle.lcd,
+);
+
+// ---------------------------------------------------------------------------
+// Concrete / Concrete Noir — neo-brutalist poster (light + dark siblings)
+// ---------------------------------------------------------------------------
+
+const Color _concreteBg = Color(0xFFE9E5DB);
+const Color _concreteInk = Color(0xFF16140F);
+const Color _concreteCard = Color(0xFFFBFAF6);
+const Color _signalRed = Color(0xFFFF3D00);
+const Color _noirBg = Color(0xFF17171A);
+const Color _noirInk = Color(0xFFEDEAE2);
+const Color _noirCard = Color(0xFF232327);
+
+const NowPlayingThemeSpec _concrete = NowPlayingThemeSpec(
+  id: NowPlayingTheme.concrete,
+  label: 'Concrete',
+  description: 'Neo-brutalist poster — bone paper, hard ink borders, signal red',
+  backgroundColor: _concreteBg,
+  backgroundLayer: BackgroundLayer.concreteGrain,
+  iconColor: _concreteInk,
+  topLabel: 'NOW PLAYING',
+  topLabelStyle: TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 1.5,
+    fontFamily: 'monospace',
+    color: _concreteInk,
+  ),
+  titleStyle: TextStyle(
+    fontSize: 30,
+    fontFamily: 'ArchivoBlack',
+    color: _concreteInk,
+    height: 1.04,
+  ),
+  artistStyle: TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 1.8,
+    color: Color(0xFF5C574B),
+  ),
+  pillTextColor: _concreteInk,
+  pillBorderColor: _concreteInk,
+  pillBackgroundColor: _concreteCard,
+  pillRadius: 4,
+  pillBorderWidth: 2,
+  pillBorderAlpha: 1,
+  pillShadows: [BoxShadow(color: _concreteInk, offset: Offset(4, 4), blurRadius: 0)],
+  pillHeartColor: _signalRed,
+  seekActiveColor: _signalRed,
+  seekInactiveColor: Color(0x1416140F),
+  seekTrackHeight: 12,
+  seekTrackBorder: BorderSide(color: _concreteInk, width: 2),
+  seekStripedFill: true,
+  seekKnobSize: 18,
+  seekKnobRadius: 2,
+  seekKnobColor: _concreteInk,
+  timeStyle: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'monospace', color: _concreteInk),
+  transportColor: _concreteInk,
+  transportActiveColor: _signalRed,
+  playBackgroundColor: _concreteInk,
+  playForegroundColor: _concreteCard,
+  playSize: 70,
+  playIconSize: 28,
+  playRadius: 6,
+  playShadows: [BoxShadow(color: _signalRed, offset: Offset(5, 5), blurRadius: 0)],
+  waveformPalette: [_concreteInk, _concreteInk, _signalRed],
+  waveformActiveColor: _signalRed,
+  waveformInactiveColor: Color(0x2416140F),
+  waveformBarGap: 3,
+  waveformSquareBars: true,
+  navTextColor: _concreteInk,
+  navBackgroundColor: _concreteCard,
+  navBorderColor: _concreteInk,
+  navRadius: 0,
+  navTextStyle: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+  artFrame: ArtFrameStyle.concrete,
+);
+
+const NowPlayingThemeSpec _concreteNoir = NowPlayingThemeSpec(
+  id: NowPlayingTheme.concreteNoir,
+  label: 'Concrete Noir',
+  description: 'Concrete after dark — charcoal slab, bone ink, same signal red',
+  backgroundColor: _noirBg,
+  backgroundLayer: BackgroundLayer.concreteGrain,
+  iconColor: _noirInk,
+  topLabel: 'NOW PLAYING',
+  topLabelStyle: TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 1.5,
+    fontFamily: 'monospace',
+    color: _noirInk,
+  ),
+  titleStyle: TextStyle(
+    fontSize: 30,
+    fontFamily: 'ArchivoBlack',
+    color: _noirInk,
+    height: 1.04,
+  ),
+  artistStyle: TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 1.8,
+    color: Color(0xFF9B968A),
+  ),
+  pillTextColor: _noirInk,
+  pillBorderColor: _noirInk,
+  pillBackgroundColor: _noirCard,
+  pillRadius: 4,
+  pillBorderWidth: 2,
+  pillBorderAlpha: 1,
+  pillShadows: [BoxShadow(color: _noirInk, offset: Offset(4, 4), blurRadius: 0)],
+  pillHeartColor: _signalRed,
+  seekActiveColor: _signalRed,
+  seekInactiveColor: Color(0x14EDEAE2),
+  seekTrackHeight: 12,
+  seekTrackBorder: BorderSide(color: _noirInk, width: 2),
+  seekStripedFill: true,
+  seekKnobSize: 18,
+  seekKnobRadius: 2,
+  seekKnobColor: _noirInk,
+  timeStyle: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, fontFamily: 'monospace', color: _noirInk),
+  transportColor: _noirInk,
+  transportActiveColor: _signalRed,
+  playBackgroundColor: _noirInk,
+  playForegroundColor: _noirBg,
+  playSize: 70,
+  playIconSize: 28,
+  playRadius: 6,
+  playShadows: [BoxShadow(color: _signalRed, offset: Offset(5, 5), blurRadius: 0)],
+  waveformPalette: [_noirInk, _noirInk, _signalRed],
+  waveformActiveColor: _signalRed,
+  waveformInactiveColor: Color(0x24EDEAE2),
+  waveformBarGap: 3,
+  waveformSquareBars: true,
+  navTextColor: _noirInk,
+  navBackgroundColor: _noirCard,
+  navBorderColor: _noirInk,
+  navRadius: 0,
+  navTextStyle: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+  artFrame: ArtFrameStyle.concrete,
+);
+
+// ---------------------------------------------------------------------------
+// Sumi Ink / Sumi Night — sumi-e brush on paper (light + dark siblings)
+// ---------------------------------------------------------------------------
+
+const Color _washi = Color(0xFFF5F1E4);
+const Color _sumiInk = Color(0xFF211E19);
+const Color _vermillion = Color(0xFFC93A2E);
+const Color _sumiGray = Color(0xFF6D675C);
+const Color _nightPaper = Color(0xFF1B1A16);
+const Color _nightWash = Color(0xFFE8E2D2);
+const Color _nightGray = Color(0xFF8F887A);
+
+const NowPlayingThemeSpec _sumi = NowPlayingThemeSpec(
+  id: NowPlayingTheme.sumi,
+  label: 'Sumi Ink',
+  description: 'Sumi-e brush on washi paper — hanging scroll, vermillion seal',
+  backgroundColor: _washi,
+  backgroundLayer: BackgroundLayer.sumiWash,
+  iconColor: _sumiInk,
+  topLabel: '再生中 · NOW PLAYING',
+  topLabelStyle: TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 4,
+    fontFamily: 'PlayfairDisplay',
+    color: _sumiGray,
+  ),
+  titleStyle: TextStyle(
+    fontSize: 27,
+    fontWeight: FontWeight.w700,
+    fontFamily: 'PlayfairDisplay',
+    color: _sumiInk,
+  ),
+  artistStyle: TextStyle(
+    fontSize: 11.5,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 3.2,
+    color: _sumiGray,
+  ),
+  pillTextColor: _sumiInk,
+  pillBorderColor: Color(0x66211E19),
+  pillBackgroundColor: Colors.transparent,
+  pillRadius: 20,
+  pillBorderAlpha: 1,
+  pillHeartColor: _vermillion,
+  seekActiveColor: _sumiInk,
+  seekInactiveColor: Color(0x38211E19),
+  seekTrackHeight: 2,
+  seekKnobSize: 14,
+  seekKnobRadius: 7,
+  seekKnobColor: _vermillion,
+  timeStyle: TextStyle(fontSize: 11, letterSpacing: 1, color: _sumiGray),
+  transportColor: _sumiInk,
+  transportActiveColor: _vermillion,
+  playBackgroundColor: Color(0xFFFBF8EF),
+  playForegroundColor: _sumiInk,
+  playSize: 74,
+  playIconSize: 30,
+  playShadows: [BoxShadow(color: Color(0x33211E19), offset: Offset(0, 8), blurRadius: 18)],
+  waveformPalette: [_sumiInk, _sumiInk, _sumiInk, _vermillion],
+  waveformActiveColor: _sumiInk,
+  waveformInactiveColor: Color(0x2E211E19),
+  waveformBarGap: 5,
+  navTextColor: _sumiInk,
+  navBackgroundColor: Colors.transparent,
+  navBorderColor: Color(0x2E211E19),
+  navRadius: 0,
+  navTextStyle: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, fontFamily: 'PlayfairDisplay', letterSpacing: 2),
+  artFrame: ArtFrameStyle.scroll,
+);
+
+const NowPlayingThemeSpec _sumiNight = NowPlayingThemeSpec(
+  id: NowPlayingTheme.sumiNight,
+  label: 'Sumi Night',
+  description: 'Sumi-e by night — charcoal paper, pale wash ink, live vermillion',
+  backgroundColor: _nightPaper,
+  backgroundLayer: BackgroundLayer.sumiWash,
+  iconColor: _nightWash,
+  topLabel: '再生中 · NOW PLAYING',
+  topLabelStyle: TextStyle(
+    fontSize: 11,
+    fontWeight: FontWeight.w600,
+    letterSpacing: 4,
+    fontFamily: 'PlayfairDisplay',
+    color: _nightGray,
+  ),
+  titleStyle: TextStyle(
+    fontSize: 27,
+    fontWeight: FontWeight.w700,
+    fontFamily: 'PlayfairDisplay',
+    color: _nightWash,
+  ),
+  artistStyle: TextStyle(
+    fontSize: 11.5,
+    fontWeight: FontWeight.w500,
+    letterSpacing: 3.2,
+    color: _nightGray,
+  ),
+  pillTextColor: _nightWash,
+  pillBorderColor: Color(0x59E8E2D2),
+  pillBackgroundColor: Colors.transparent,
+  pillRadius: 20,
+  pillBorderAlpha: 1,
+  pillHeartColor: _vermillion,
+  seekActiveColor: _nightWash,
+  seekInactiveColor: Color(0x38E8E2D2),
+  seekTrackHeight: 2,
+  seekKnobSize: 14,
+  seekKnobRadius: 7,
+  seekKnobColor: _vermillion,
+  timeStyle: TextStyle(fontSize: 11, letterSpacing: 1, color: _nightGray),
+  transportColor: _nightWash,
+  transportActiveColor: _vermillion,
+  playBackgroundColor: Color(0xFF26251F),
+  playForegroundColor: _nightWash,
+  playSize: 74,
+  playIconSize: 30,
+  playShadows: [BoxShadow(color: Color(0x4D000000), offset: Offset(0, 8), blurRadius: 20)],
+  waveformPalette: [_nightWash, _nightWash, _nightWash, _vermillion],
+  waveformActiveColor: _nightWash,
+  waveformInactiveColor: Color(0x2EE8E2D2),
+  waveformBarGap: 5,
+  navTextColor: _nightWash,
+  navBackgroundColor: Colors.transparent,
+  navBorderColor: Color(0x33E8E2D2),
+  navRadius: 0,
+  navTextStyle: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, fontFamily: 'PlayfairDisplay', letterSpacing: 2),
+  artFrame: ArtFrameStyle.scroll,
 );
 
 // ===========================================================================

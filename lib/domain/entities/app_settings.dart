@@ -1,10 +1,21 @@
 /// Skins for the Now Playing screen. [classic] is the original dark +
 /// dominant-color design and remains the default.
-enum NowPlayingTheme { classic, risoZine, paperPress, pocketLcd }
+///
+/// Values are persisted by index — only ever APPEND new skins.
+enum NowPlayingTheme {
+  classic,
+  risoZine,
+  paperPress,
+  pocketLcd,
+  concrete,
+  sumi,
+  concreteNoir,
+  sumiNight,
+}
 
 /// App-wide color presets. The zine/LCD presets mirror the matching
 /// [NowPlayingTheme] skins (and auto-select them when chosen). Values are
-/// persisted by index — keep the order stable.
+/// persisted by index — keep the order stable and only APPEND new presets.
 enum ThemePreset {
   system,
   light,
@@ -15,6 +26,10 @@ enum ThemePreset {
   matrix,
   pocketLcd,
   custom,
+  concrete,
+  sumi,
+  concreteNoir,
+  sumiNight,
 }
 
 class AppSettings {

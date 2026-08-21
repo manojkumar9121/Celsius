@@ -22,10 +22,14 @@ final themeModeProvider = Provider<ThemeMode>((ref) {
     case ThemePreset.risoZine:
     case ThemePreset.paperPress:
     case ThemePreset.pocketLcd:
+    case ThemePreset.concrete:
+    case ThemePreset.sumi:
       return ThemeMode.light;
     case ThemePreset.dark:
     case ThemePreset.nord:
     case ThemePreset.matrix:
+    case ThemePreset.concreteNoir:
+    case ThemePreset.sumiNight:
       return ThemeMode.dark;
   }
 });
@@ -52,6 +56,14 @@ ThemeData _buildThemeData(AppSettings settings) {
       return _matrixTheme;
     case ThemePreset.pocketLcd:
       return _pocketLcdTheme;
+    case ThemePreset.concrete:
+      return _concreteTheme;
+    case ThemePreset.sumi:
+      return _sumiTheme;
+    case ThemePreset.concreteNoir:
+      return _concreteNoirTheme;
+    case ThemePreset.sumiNight:
+      return _sumiNightTheme;
     default:
       return _darkTheme;
   }
@@ -86,6 +98,14 @@ class SettingsNotifier extends StateNotifier<AppSettings> {
         return NowPlayingTheme.paperPress;
       case ThemePreset.pocketLcd:
         return NowPlayingTheme.pocketLcd;
+      case ThemePreset.concrete:
+        return NowPlayingTheme.concrete;
+      case ThemePreset.sumi:
+        return NowPlayingTheme.sumi;
+      case ThemePreset.concreteNoir:
+        return NowPlayingTheme.concreteNoir;
+      case ThemePreset.sumiNight:
+        return NowPlayingTheme.sumiNight;
       default:
         return null;
     }
@@ -309,4 +329,62 @@ final _pocketLcdTheme = ThemeData.light().copyWith(
     foregroundColor: Color(0xFF0F380F),
     elevation: 0,
   ),
+);
+
+/// Concrete: bone paper, ink structure, signal-red accent.
+final _concreteTheme = ThemeData.light().copyWith(
+  brightness: Brightness.light,
+  colorScheme: const ColorScheme.light(
+    primary: Color(0xFFFF3D00),
+    secondary: Color(0xFF16140F),
+    tertiary: Color(0xFF16140F),
+    surface: Color(0xFFFBFAF6),
+  ),
+  scaffoldBackgroundColor: const Color(0xFFE9E5DB),
+  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFFE9E5DB)),
+  cardTheme: const CardThemeData(color: Color(0xFFFBFAF6)),
+  dividerColor: const Color(0xFF16140F),
+);
+
+/// Sumi Ink: washi paper, sumi ink, vermillion seal accent.
+final _sumiTheme = ThemeData.light().copyWith(
+  brightness: Brightness.light,
+  colorScheme: const ColorScheme.light(
+    primary: Color(0xFFC93A2E),
+    secondary: Color(0xFF211E19),
+    tertiary: Color(0xFF211E19),
+    surface: Color(0xFFFBF8EE),
+  ),
+  scaffoldBackgroundColor: const Color(0xFFF5F1E4),
+  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFFF5F1E4)),
+  cardTheme: const CardThemeData(color: Color(0xFFFBF8EE)),
+);
+
+/// Concrete Noir: charcoal slab, bone ink, signal red.
+final _concreteNoirTheme = ThemeData.dark().copyWith(
+  brightness: Brightness.dark,
+  colorScheme: const ColorScheme.dark(
+    primary: Color(0xFFFF3D00),
+    secondary: Color(0xFFEDEAE2),
+    tertiary: Color(0xFFEDEAE2),
+    surface: Color(0xFF232327),
+  ),
+  scaffoldBackgroundColor: const Color(0xFF17171A),
+  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF17171A)),
+  cardTheme: const CardThemeData(color: Color(0xFF232327)),
+  dividerColor: const Color(0xFFEDEAE2),
+);
+
+/// Sumi Night: charcoal paper, pale wash ink, live vermillion.
+final _sumiNightTheme = ThemeData.dark().copyWith(
+  brightness: Brightness.dark,
+  colorScheme: const ColorScheme.dark(
+    primary: Color(0xFFC93A2E),
+    secondary: Color(0xFFE8E2D2),
+    tertiary: Color(0xFFE8E2D2),
+    surface: Color(0xFF26251F),
+  ),
+  scaffoldBackgroundColor: const Color(0xFF1B1A16),
+  navigationBarTheme: const NavigationBarThemeData(backgroundColor: Color(0xFF1B1A16)),
+  cardTheme: const CardThemeData(color: Color(0xFF26251F)),
 );
