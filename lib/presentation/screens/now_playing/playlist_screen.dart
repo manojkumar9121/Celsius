@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:celsuis/presentation/providers/audio_player_provider.dart';
 import 'package:celsuis/presentation/providers/playlist_provider.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsuis/presentation/themes/now_playing_theme_widgets.dart';
 
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});
@@ -10,27 +12,17 @@ class PlaylistScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final song = ref.watch(audioPlayerProvider).currentSong;
-    final theme = Theme.of(context);
-    final textColor = theme.colorScheme.onSurface;
 
-    return Theme(
-      data: theme.copyWith(
-        iconButtonTheme: IconButtonThemeData(
-          style: IconButton.styleFrom(foregroundColor: textColor),
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          title: const Text('Playlist', style: TextStyle(color: Colors.white)),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
-        body: song == null
-            ? Center(child: Text('No song playing', style: TextStyle(color: textColor)))
-            : _PlaylistList(song: song),
-      ),
+    return NowPlayingSubScreen(
+      title: 'Playlist',
+      body: song == null
+          ? Center(
+              child: Text(
+                'No song playing',
+                style: TextStyle(color: ref.watch(nowPlayingThemeSpecProvider).inkColor),
+              ),
+            )
+          : _PlaylistList(song: song),
     );
   }
 }
@@ -42,7 +34,7 @@ class _PlaylistList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final textColor = theme.colorScheme.onSurface;
+    final textColor = ref.watch(nowPlayingThemeSpecProvider).inkColor;
     final playlists = ref.watch(playlistProvider).playlists;
 
     if (playlists.isEmpty) {
@@ -79,7 +71,10 @@ class _PlaylistList extends ConsumerWidget {
               fontWeight: alreadyAdded ? FontWeight.bold : FontWeight.normal,
             ),
           ),
-          subtitle: Text('${playlist.songIds.length} songs'),
+          subtitle: Text(
+            '${playlist.songIds.length} songs',
+            style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 13),
+          ),
           trailing: alreadyAdded
               ? const Icon(Icons.check, color: Colors.green)
               : null,

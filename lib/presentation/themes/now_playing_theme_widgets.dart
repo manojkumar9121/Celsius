@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:celsuis/core/widgets/cached_song_image.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
@@ -978,6 +979,49 @@ class _LcdStatusLineState extends State<LcdStatusLine>
           ),
         );
       },
+    );
+  }
+}
+
+// ===========================================================================
+// Auxiliary screen chrome
+// ===========================================================================
+
+/// Scaffold chrome shared by the Now Playing auxiliary screens (queue,
+/// playlist, lyrics).
+///
+/// Paints the active skin's background and ink colors so those screens match
+/// the Now Playing screen in every theme instead of staying plain black
+/// ([NowPlayingTheme.classic] keeps its original black background).
+class NowPlayingSubScreen extends ConsumerWidget {
+  final String title;
+  final Widget body;
+
+  const NowPlayingSubScreen({
+    super.key,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final spec = ref.watch(nowPlayingThemeSpecProvider);
+    return Theme(
+      data: Theme.of(context).copyWith(
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(foregroundColor: spec.iconColor),
+        ),
+      ),
+      child: Scaffold(
+        backgroundColor: spec.backgroundColor ?? Colors.black,
+        appBar: AppBar(
+          title: Text(title, style: TextStyle(color: spec.inkColor)),
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: IconThemeData(color: spec.iconColor),
+        ),
+        body: body,
+      ),
     );
   }
 }

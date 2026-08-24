@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:celsuis/presentation/providers/audio_player_provider.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsuis/presentation/themes/now_playing_theme_widgets.dart';
 
 class QueueScreen extends ConsumerWidget {
   const QueueScreen({super.key});
@@ -11,25 +13,10 @@ class QueueScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final queue = ref.watch(audioPlayerProvider).queue;
     final currentSong = ref.watch(audioPlayerProvider).currentSong;
-    final theme = Theme.of(context);
-    final textColor = theme.colorScheme.onSurface;
 
-    return Theme(
-      data: theme.copyWith(
-        iconButtonTheme: IconButtonThemeData(
-          style: IconButton.styleFrom(foregroundColor: textColor),
-        ),
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          title: Text('Queue (${queue.length} songs)', style: const TextStyle(color: Colors.white)),
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          iconTheme: const IconThemeData(color: Colors.white),
-        ),
-        body: _QueueList(queue: queue, currentSong: currentSong),
-      ),
+    return NowPlayingSubScreen(
+      title: 'Queue (${queue.length} songs)',
+      body: _QueueList(queue: queue, currentSong: currentSong),
     );
   }
 }
@@ -43,7 +30,7 @@ class _QueueList extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final textColor = theme.colorScheme.onSurface;
+    final textColor = ref.watch(nowPlayingThemeSpecProvider).inkColor;
 
     if (queue.isEmpty) {
       return Center(

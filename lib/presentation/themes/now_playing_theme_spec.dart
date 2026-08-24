@@ -193,6 +193,11 @@ class NowPlayingThemeSpec {
     required this.artFrame,
   });
 
+  /// Primary foreground ink for this skin (the color its own title text is
+  /// painted with). The auxiliary screens (queue, playlist, lyrics) reuse it
+  /// so their text stays readable on the skin's background.
+  Color get inkColor => titleStyle.color ?? Colors.white;
+
   /// Slider theme for themed skins; null keeps the classic inline defaults.
   SliderThemeData? sliderTheme() {
     if (id == NowPlayingTheme.classic) return null;

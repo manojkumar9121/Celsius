@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
@@ -45,6 +46,44 @@ void main() {
     final classic = nowPlayingThemeSpecs[NowPlayingTheme.classic]!;
     expect(classic.sliderTheme(), isNull);
     expect(classic.showBlurredArtwork, isTrue);
+  });
+
+  test('every spec has an ink color readable on its background', () {
+    for (final theme in NowPlayingTheme.values) {
+      final spec = nowPlayingThemeSpecs[theme]!;
+      expect(spec.inkColor, isNotNull, reason: 'missing ink color for $theme');
+    }
+  });
+
+  testWidgets('auxiliary screen chrome follows the active skin',
+      (WidgetTester tester) async {
+    for (final theme in NowPlayingTheme.values) {
+      final spec = nowPlayingThemeSpecs[theme]!;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            nowPlayingThemeSpecProvider.overrideWithValue(spec),
+          ],
+          child: MaterialApp(
+            home: NowPlayingSubScreen(title: 'Queue', body: const SizedBox.expand()),
+          ),
+        ),
+      );
+
+      final scaffold = tester.widget<Scaffold>(find.byType(Scaffold));
+      expect(
+        scaffold.backgroundColor,
+        spec.backgroundColor ?? Colors.black,
+        reason: 'sub-screen background does not match the $theme skin',
+      );
+
+      final title = tester.widget<Text>(find.text('Queue'));
+      expect(
+        title.style?.color,
+        spec.inkColor,
+        reason: 'sub-screen title is not painted in the $theme ink color',
+      );
+    }
   });
 
   testWidgets('renders every background + art frame without errors',
