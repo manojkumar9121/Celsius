@@ -34,6 +34,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
   double? _seekDragValue;
   late AnimationController _playBounceController;
   bool _showingPlayBounce = false;
+  int _activeNavTab = 0;
 
   @override
   void initState() {
@@ -586,6 +587,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
   }
 
   Widget _buildBottomNavigation(NowPlayingThemeSpec spec) {
+    if (spec.navStyle == NowPlayingNavStyle.lcdBar) {
+      return _buildLcdBar(spec);
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       child: Row(
@@ -617,6 +621,30 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildLcdBar(NowPlayingThemeSpec spec) {
+    final color = spec.navTextColor;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      child: Container(
+        decoration: BoxDecoration(
+          border: Border(
+            top: BorderSide(color: spec.navBorderColor, width: 1.5),
+            bottom: BorderSide(color: spec.navBorderColor, width: 1.5),
+          ),
+        ),
+        child: Row(
+          children: [
+            _LcdNavTab(label: 'LYRICS', index: 0, active: _activeNavTab == 0, color: color, onTap: () { setState(() => _activeNavTab = 0); context.push('/lyrics'); }),
+            _LcdNavDot(color: spec.navBorderColor),
+            _LcdNavTab(label: 'QUEUE', index: 1, active: _activeNavTab == 1, color: color, onTap: () { setState(() => _activeNavTab = 1); context.push('/queue'); }),
+            _LcdNavDot(color: spec.navBorderColor),
+            _LcdNavTab(label: 'LIST', index: 2, active: _activeNavTab == 2, color: color, onTap: () { setState(() => _activeNavTab = 2); context.push('/playlist'); }),
+          ],
+        ),
       ),
     );
   }
@@ -826,6 +854,69 @@ class _NavigationButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _LcdNavTab extends StatelessWidget {
+  final String label;
+  final int index;
+  final bool active;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _LcdNavTab({
+    required this.label,
+    required this.index,
+    required this.active,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 5),
+          decoration: active
+              ? BoxDecoration(
+                  color: color.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(3),
+                )
+              : null,
+          child: Text(
+            label,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'PressStart2P',
+              fontSize: 6.5,
+              color: active ? color : color.withValues(alpha: 0.55),
+              letterSpacing: 0.5,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LcdNavDot extends StatelessWidget {
+  final Color color;
+
+  const _LcdNavDot({required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      width: 4,
+      height: 4,
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.5),
+        shape: BoxShape.circle,
       ),
     );
   }

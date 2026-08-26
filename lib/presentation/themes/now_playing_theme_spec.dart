@@ -29,6 +29,15 @@ enum BackgroundLayer {
 /// How the album artwork is framed on the Now Playing screen.
 enum ArtFrameStyle { classic, riso, paper, lcd, concrete, scroll }
 
+/// Layout style for the bottom navigation strip.
+enum NowPlayingNavStyle {
+  /// Three boxed pills (default for all non-LCD themes).
+  pill,
+
+  /// Single thin LCD-bar strip — compact, dot-matrix labels with dot separators.
+  lcdBar,
+}
+
 /// Complete visual skin for the Now Playing screen.
 ///
 /// One spec per [NowPlayingTheme]. The [NowPlayingThemeSpec.classic] spec is
@@ -132,6 +141,9 @@ class NowPlayingThemeSpec {
   final double navRadius;
   final TextStyle navTextStyle;
 
+  /// Bottom nav layout: boxed pills (default) or single thin LCD bar.
+  final NowPlayingNavStyle navStyle;
+
   // Art frame --------------------------------------------------------------
 
   final ArtFrameStyle artFrame;
@@ -190,6 +202,7 @@ class NowPlayingThemeSpec {
     required this.navBorderColor,
     this.navRadius = 12,
     required this.navTextStyle,
+    this.navStyle = NowPlayingNavStyle.pill,
     required this.artFrame,
   });
 
@@ -442,8 +455,9 @@ const NowPlayingThemeSpec _pocketLcd = NowPlayingThemeSpec(
   navBackgroundColor: Color(0x0F0F380F),
   navBorderColor: Color(0xFF306230),
   navRadius: 6,
-   navTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 8),
-   artFrame: ArtFrameStyle.lcd,
+    navTextStyle: TextStyle(fontFamily: 'PressStart2P', fontSize: 8),
+    navStyle: NowPlayingNavStyle.lcdBar,
+    artFrame: ArtFrameStyle.lcd,
 );
 
 // ---------------------------------------------------------------------------
