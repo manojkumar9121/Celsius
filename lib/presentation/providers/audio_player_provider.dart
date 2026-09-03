@@ -284,18 +284,25 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     // oldIndex/newIndex arrive pre-adjusted (onReorderItem semantics): the
     // item was already removed from the list before newIndex was computed.
     if (oldIndex < 0 || oldIndex >= state.queue.length) return;
-    final handler = _handler;
-    if (handler != null) {
-      unawaited(handler.reorderQueue(oldIndex, newIndex).catchError((Object e) {
-        debugPrint('Queue reorder failed: $e');
-      }));
-    }
     if (newIndex < 0 || newIndex > state.queue.length) return;
 
-    final songs = List<SongEntity>.from(state.queue);
-    final song = songs.removeAt(oldIndex);
-    songs.insert(newIndex, song);
-    state = state.copyWith(queue: songs);
+    final handler = _handler;
+    if (handler == null) {
+      final songs = List<SongEntity>.from(state.queue);
+      final song = songs.removeAt(oldIndex);
+      songs.insert(newIndex, song);
+      state = state.copyWith(queue: songs);
+      return;
+    }
+
+    unawaited(handler.reorderQueue(oldIndex, newIndex).then((_) {
+      final songs = List<SongEntity>.from(state.queue);
+      final song = songs.removeAt(oldIndex);
+      songs.insert(newIndex, song);
+      state = state.copyWith(queue: songs);
+    }).catchError((Object e) {
+      debugPrint('Queue reorder failed: $e');
+    }));
   }
 
   @override
