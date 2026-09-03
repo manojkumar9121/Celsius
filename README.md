@@ -1,72 +1,84 @@
 # Celsuis
 
-A sleek offline music player for Android that plays your local music library — no account, no streaming, no ads. Everything runs on-device.
-
-## Screenshots
-
-| Home | Playlists | Queue | Now Playing | Library |
-| --- | --- | --- | --- | --- |
-| <img src="screenshots/screenshot-home.jpg" width="190" alt="Home screen"> | <img src="screenshots/screenshot-playlist.jpg" width="190" alt="Playlists"> | <img src="screenshots/screenshot-queue.jpg" width="190" alt="Queue"> | <img src="screenshots/screenshot-player.jpg" width="190" alt="Now Playing screen"> | <img src="screenshots/screenshot-library.jpg" width="190" alt="Library"> |
+A offline-first Flutter music player for Android. Scans your device storage, plays local audio files, and keeps everything in Hive — no cloud, no accounts, no telemetry.
 
 ## Features
 
-- **Local library scan** — pick folders to scan; songs, albums, artists and genres are indexed automatically
-- **Playlists** — create and manage your own playlists, reorder songs with drag & drop
-- **Background playback** — keeps playing with lockscreen / notification media controls (audio_service)
-- **Shuffle & repeat** — smart shuffle that keeps your current song context; all, one, and off repeat modes
-- **Queue** — inspect, reorder, and jump around the upcoming queue
-- **Now Playing** — full-screen player with artwork, colors extracted from the album art, and a mini player on every tab
-- **Lyrics** — timed lyrics view for the current track
-- **Stats** — listening statistics for your library
-- **Themes** — system, light, dark, and color presets (Riso Zine, Nord, Paper Press, Matrix, Pocket LCD, Custom), plus four Now Playing skins (Classic, Riso Zine, Paper Press, Pocket LCD) with their own fonts and artwork treatments
-- **Offline-first** — all data (library, playlists, settings) is persisted locally with Hive
+- **Local library** — scans managed folders, indexes songs via `onMethodCall` content providers and media store queries
+- **Background playback** — `audio_service` + `just_audio` with notification controls, lock-screen art, and headset buttons
+- **Queue management** — shuffle, repeat modes (off / one / all), drag-to-reorder, add-to-queue, play-next
+- **Waveform visualization** — extracted via compute isolate, cached per file, multiple painter styles (bars, line, ribbon, wave, dots, equalizer, blocks, neon, radial)
+- **Now Playing themes** — 9 skins (classic, risoZine, paperPress, pocketLcd, concrete, sumi, concreteNoir, sumiNight) plus a custom color picker
+- **Lyrics** — reads embedded LRC tags via `flutter_audio_tagger`, client-side LRC parser
+- **Home widget** — Android home-screen widget wired through a `MethodChannel` for play/pause/next/prev
+- **Settings persistence** — all preferences saved to Hive as JSON; schema versioned with forward migration hooks
 
-## Themes
+## Permissions
 
-**App presets** — pick one in *Settings → Theme Preset*: System, Light, Dark, Riso Zine, Nord, Paper Press, Matrix, Pocket LCD, or Custom (pick your own primary + accent colors).
+- `READ_EXTERNAL_STORAGE` / `READ_MEDIA_AUDIO` — library scan (declared in `AndroidManifest.xml`)
+- `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MEDIA_PLAYBACK` — required for background audio
+- `POST_NOTIFICATIONS` — Android 13+ media notification (requested at runtime)
+- `WAKE_LOCK` — keeps CPU alive during playback
 
-**Now Playing skins** — pick one in *Settings → Appearance → Now Playing Theme*:
+## Architecture
 
-| Skin | Look |
-| --- | --- |
-| Classic | Original dark design — blurred artwork with dominant-color accents (default) |
-| Riso Zine | Cream risograph print: halftone patches, pink/blue inks, star badge, Archivo Black |
-| Paper Press | Warm paper zine: grain + vignette, tape corners, brick-red ink, Playfair Display |
-| Pocket LCD | Handheld dot-matrix: olive screen, pixel grid, LCD seek bar, VT323 / Press Start 2P |
-
-Choosing a matching app preset (Riso Zine, Paper Press, or Pocket LCD) switches the Now Playing skin to match automatically — the skin stays independently adjustable afterwards.
-
-## Tech stack
-
-- Flutter (Material 3) with Riverpod for state management
-- `just_audio` + `audio_service` for background playback
-- `Hive` for local persistence (with generated boxes for songs, playlists, settings)
-- `go_router` for navigation
-
-## Getting started
-
-```bash
-flutter pub get
-flutter run
+```
+lib/
+  main.dart              — entrypoint, Hive init, audio_service bootstrap
+  app.dart               — go_router config + top-level widget tree
+  core/                  — constants, error boundary, shared widgets
+  data/
+    local_storage/       — Hive boxes (songs, playlists, settings) + JSON schema
+  domain/
+    entities/            — SongEntity, PlaylistEntity, AppSettings
+  presentation/
+    providers/           — Riverpod state notifiers (audio player, library, playlists, settings)
+    screens/             — Home, Library, Now Playing, Queue, Playlist detail, Stats, Settings
+    widgets/             — Waveform viewer, song tile, mini player, action menu
+  services/
+    background_audio_service.dart  — AudioPlayerHandler (audio_service)
+    widget_service.dart            — Android home widget channel
+    lyrics_service.dart            — embedded-lyrics cache + LRC parser
+    waveform_extractor_service.dart — isolate-based waveform extraction
 ```
 
-The app requests storage permissions on first launch so it can scan your audio folders.
+- **State management**: Riverpod (`flutter_riverpod`). Top-level `ProviderContainer` is created in `main.dart` and passed through `UncontrolledProviderScope`.
+- **Routing**: `go_router` with deferred-loaded screens (now-playing, queue, lyrics, stats).
+- **Audio stack**: `audio_service` bridges to Android media session; `just_audio` handles decoding/sequencing; `audio_handler` lives in the isolate spawned by `audio_service.init()`.
 
-## Icons & artwork
+## Building
 
-All launcher, splash, and notification icons are generated from the design master in `icon_concepts/` via the Python scripts (`build_icons.py`, `generate_icons.py`). Don't edit generated PNGs directly — re-run the scripts instead.
-
-## Build
+Requires Flutter 3.44.5 stable / Dart 3.12.2 (pinned in `.metadata`).
 
 ```bash
-flutter build apk
+# Analyze
+~/flutter/bin/flutter analyze
+
+# Run tests
+~/flutter/bin/flutter test
+
+# Build debug APK
+~/flutter/bin/flutter build apk --debug
+
+# Build release APK
+~/flutter/bin/flutter build apk --release
+
+# Regenerate Hive adapters after editing @HiveType classes
+~/flutter/bin/dart run build_runner build
 ```
 
-## Acknowledgements
+Icons are generated, not hand-made. To update them:
 
-This project was developed with AI assistance:
+```bash
+python3 build_icons.py          # Android launcher/splash/notification icons
+python3 generate_icons.py       # assets/icons/*.png
+```
 
-- **KAT-Coder-V2.5-Dev** — the primary coding assistant, very reliable at following instructions and turning feature requests into working code
-- **DeepSeek V4 Flash** — secondary assistant used for larger codegen and review passes
+## Project layout note
 
-Human oversight, design direction, and testing were provided throughout development.
+This repo contains two nearly identical Flutter projects:
+
+- `celsuis/` — active development workspace (has `build/`, `.dart_tool/`)
+- `C-clone/` — production copy synced to GitHub
+
+All changes are made in `celsuis/` first and then mirrored to `C-clone/`. Run `pub get`, `build_runner`, `analyze`, and `test` in both after mirroring.

@@ -195,12 +195,19 @@ class HiveStorage {
   }
 
   static Future<void> deleteSongs(List<String> ids) async {
+    final pathsToRemove = <String>[];
     for (final id in ids) {
       final song = getSong(id);
-      await songsBox?.delete(id);
       if (song != null && song.filePath.isNotEmpty) {
-        await WaveformExtractorService.instance.removeFromCache(song.filePath);
+        pathsToRemove.add(song.filePath);
       }
+    }
+    await songsBox?.deleteAll(ids);
+    if (pathsToRemove.isNotEmpty) {
+      await Future.wait(
+        pathsToRemove.map((p) => WaveformExtractorService.instance.removeFromCache(p)),
+        eagerError: false,
+      );
     }
   }
 
@@ -311,19 +318,30 @@ class HiveStorage {
     if (!_initialized) return;
     final encoded = _safeEncode(settings.toJson());
     if (encoded != null) {
+      _cachedSettings = settings;
       await settingsBox?.put('app_settings', encoded);
       await settingsBox?.flush();
     }
   }
 
+  static AppSettings? _cachedSettings;
+
+  /// Clears the in-memory settings cache. Intended for tests that need a
+  /// fresh read from storage between cases.
+  static void resetSettingsCache() => _cachedSettings = null;
+
   static AppSettings getSettings() {
     if (!_initialized) return const AppSettings();
+    final cached = _cachedSettings;
+    if (cached != null) return cached;
     final box = settingsBox;
     if (box == null) return const AppSettings();
     final record = _safeDecode(box.get('app_settings') as String?);
     if (record == null) return const AppSettings();
     try {
-      return AppSettings.fromJson(record);
+      final settings = AppSettings.fromJson(record);
+      _cachedSettings = settings;
+      return settings;
     } catch (e) {
       debugPrint('Settings decode failed ($e) — using defaults');
       return const AppSettings();
@@ -361,6 +379,9 @@ class HiveStorage {
         await box.delete('app_settings');
       } catch (_) {}
       await saveSettings(const AppSettings());
+      return;
     }
+    // Warm the cache so subsequent getSettings() calls are free.
+    _cachedSettings = AppSettings.fromJson(_safeDecode(raw)!);
   }
 }

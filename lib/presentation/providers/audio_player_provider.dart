@@ -11,8 +11,10 @@ import 'package:celsuis/data/local_storage/hive_storage.dart';
 
 final audioHandlerProvider = StateProvider<AudioPlayerHandler?>((ref) => null);
 
+final widgetServiceProvider = Provider<WidgetService>((ref) => WidgetService());
+
 final audioPlayerStateProvider = StateNotifierProvider<AudioPlayerNotifier, AudioPlayerState>((ref) {
-  final notifier = AudioPlayerNotifier();
+  final notifier = AudioPlayerNotifier(widgetService: ref.watch(widgetServiceProvider));
   ref.listen(audioHandlerProvider, (_, handler) => notifier.setHandler(handler));
   return notifier;
 });
@@ -21,7 +23,7 @@ final audioPlayerProvider = audioPlayerStateProvider;
 
 class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBindingObserver {
   AudioPlayerHandler? _handler;
-  final WidgetService _widgetService = WidgetService();
+  final WidgetService _widgetService;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<MediaItem?>? _mediaItemSub;
@@ -31,7 +33,9 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   SongEntity? _pendingSong;
   List<SongEntity>? _pendingQueue;
 
-  AudioPlayerNotifier() : super(const AudioPlayerState()) {
+  AudioPlayerNotifier({WidgetService? widgetService})
+      : _widgetService = widgetService ?? WidgetService(),
+        super(const AudioPlayerState()) {
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -53,6 +57,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
       _widgetService.onPrevious = () => skipToPrevious();
       _widgetService.onPlayPause = () => togglePlayPause();
       _widgetService.onNext = () => skipToNext();
+      _widgetService.init();
     }
 
     _positionSub = handler.player.positionStream.listen((pos) {

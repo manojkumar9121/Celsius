@@ -320,7 +320,6 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     _wantPlaying = false;
     _lastPosition = player.position;
     await player.stop();
-    await player.setAudioSource(AudioSource.uri(Uri.parse('')));
     playbackState.add(playbackState.value.copyWith(
       processingState: AudioProcessingState.idle,
       controls: [],
