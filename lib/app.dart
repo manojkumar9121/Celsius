@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:celsuis/core/constants/app_constants.dart';
 import 'package:celsuis/core/widgets/custom_page_transition.dart';
+import 'package:celsuis/domain/entities/app_settings.dart';
 import 'package:celsuis/presentation/providers/settings_provider.dart';
 import 'package:celsuis/presentation/screens/home/home_screen.dart';
 import 'package:celsuis/presentation/screens/library/library_screen.dart';
@@ -88,12 +89,13 @@ class CelsuisApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeModeProvider);
     final currentTheme = ref.watch(currentThemeProvider);
+    final preset = ref.watch(settingsProvider.select((s) => s.themePreset));
     final effectiveLightTheme = currentTheme.brightness == Brightness.dark
         ? _lightFallbackTheme
-        : currentTheme;
+        : _applyPocketLcdFonts(currentTheme, preset);
     final effectiveDarkTheme = currentTheme.brightness == Brightness.light
         ? _darkFallbackTheme
-        : currentTheme;
+        : _applyPocketLcdFonts(currentTheme, preset);
     final router = ref.watch(routerProvider);
     return MaterialApp.router(
       title: AppConstants.appName,
@@ -102,6 +104,29 @@ class CelsuisApp extends ConsumerWidget {
       darkTheme: effectiveDarkTheme,
       themeMode: themeMode,
       routerConfig: router,
+    );
+  }
+
+  static ThemeData _applyPocketLcdFonts(ThemeData theme, ThemePreset preset) {
+    if (preset != ThemePreset.pocketLcd) return theme;
+    return theme.copyWith(
+      textTheme: theme.textTheme.copyWith(
+        displayLarge: theme.textTheme.displayLarge?.copyWith(fontFamily: 'VT323'),
+        displayMedium: theme.textTheme.displayMedium?.copyWith(fontFamily: 'VT323'),
+        displaySmall: theme.textTheme.displaySmall?.copyWith(fontFamily: 'VT323'),
+        headlineLarge: theme.textTheme.headlineLarge?.copyWith(fontFamily: 'VT323'),
+        headlineMedium: theme.textTheme.headlineMedium?.copyWith(fontFamily: 'VT323'),
+        headlineSmall: theme.textTheme.headlineSmall?.copyWith(fontFamily: 'VT323'),
+        titleLarge: theme.textTheme.titleLarge?.copyWith(fontFamily: 'PressStart2P'),
+        titleMedium: theme.textTheme.titleMedium?.copyWith(fontFamily: 'PressStart2P'),
+        titleSmall: theme.textTheme.titleSmall?.copyWith(fontFamily: 'PressStart2P'),
+        bodyLarge: theme.textTheme.bodyLarge?.copyWith(fontFamily: 'VT323'),
+        bodyMedium: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'VT323'),
+        bodySmall: theme.textTheme.bodySmall?.copyWith(fontFamily: 'VT323'),
+        labelLarge: theme.textTheme.labelLarge?.copyWith(fontFamily: 'PressStart2P'),
+        labelMedium: theme.textTheme.labelMedium?.copyWith(fontFamily: 'PressStart2P'),
+        labelSmall: theme.textTheme.labelSmall?.copyWith(fontFamily: 'PressStart2P'),
+      ),
     );
   }
 }
