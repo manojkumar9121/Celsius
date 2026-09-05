@@ -6,8 +6,10 @@ import 'package:just_audio/just_audio.dart';
 import 'package:celsuis/data/local_storage/hive_storage.dart';
 import 'package:celsuis/domain/entities/song_entity.dart';
 
-class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
+class AudioPlayerHandler extends BaseAudioHandler
+    with QueueHandler, SeekHandler {
   late final AudioPlayer player;
+  late final AudioPlayer _crossfadePlayer;
   List<SongEntity> _queue = [];
   List<SongEntity> _orderedQueue = [];
   int _currentIndex = 0;
@@ -18,10 +20,12 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   ConcatenatingAudioSource? _source;
   Duration _lastPosition = Duration.zero;
   int _queueSetSeq = 0;
+
   /// Index of the last song whose play count was recorded. Guards against
   /// double counting when the same index is re-emitted (e.g. after a
   /// shuffle/reorder rebuild that keeps the current song).
   int _countedIndex = -1;
+
   /// While true, the current-index handler updates [_currentIndex] but does
   /// NOT emit mediaItem/play-count events. Used during in-place source
   /// reorders (shuffle toggles, queue reorders), where every move() fires an
@@ -36,110 +40,366 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<Duration?>? _durationSub;
 
+  // Crossfade state
+  bool _crossfadeEnabled = false;
+  int _crossfadeDurationMs = 300;
+  Timer? _crossfadeTimer;
+  Timer? _fadeOutTimer;
+  bool _isCrossfading = false;
+  bool _awaitingTrackChange = false;
+  int? _preloadedCrossfadeIndex;
+  double _userVolume = 1.0;
+  bool _skipInProgress = false;
+
   AudioPlayerHandler() {
     try {
       player = AudioPlayer();
+      _crossfadePlayer = AudioPlayer(handleInterruptions: false);
     } catch (e) {
       debugPrint('Failed to initialize AudioPlayer: $e');
       rethrow;
     }
 
-    playbackState.add(PlaybackState(
-      playing: false,
-      processingState: AudioProcessingState.idle,
-      controls: [
-        MediaControl.skipToPrevious,
-        MediaControl.play,
-        MediaControl.skipToNext,
-      ],
-      systemActions: {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1, 2],
-    ));
+    playbackState.add(
+      PlaybackState(
+        playing: false,
+        processingState: AudioProcessingState.idle,
+        controls: [
+          MediaControl.skipToPrevious,
+          MediaControl.play,
+          MediaControl.skipToNext,
+        ],
+        systemActions: {MediaAction.seek},
+        androidCompactActionIndices: const [0, 1, 2],
+      ),
+    );
 
-    _positionSub = player.positionStream.listen((pos) {
-      try {
-        playbackState.add(playbackState.value.copyWith(
-          updatePosition: pos,
-          systemActions: {MediaAction.seek},
-        ));
-      } catch (e) {
+    _positionSub = player.positionStream.listen(
+      (pos) {
+        try {
+          if (_crossfadeEnabled &&
+              player.playing &&
+              !_isCrossfading &&
+              !_awaitingTrackChange) {
+            _startCrossfadeMonitor();
+          }
+          playbackState.add(
+            playbackState.value.copyWith(
+              updatePosition: pos,
+              systemActions: {MediaAction.seek},
+            ),
+          );
+        } catch (e) {
+          debugPrint('Position stream error: $e');
+        }
+      },
+      onError: (Object e) {
         debugPrint('Position stream error: $e');
-      }
-    }, onError: (Object e) {
-      debugPrint('Position stream error: $e');
-    });
+      },
+    );
 
-    _durationSub = player.durationStream.listen((duration) {
-      try {
-        final item = _lastMediaItem;
-        if (item == null || duration == null || duration <= Duration.zero) return;
-        if (item.duration == duration) return;
-        if (_currentIndex < 0 || _currentIndex >= _queue.length) return;
-        if (_queue[_currentIndex].id != item.id) return;
-        _lastMediaItem = item.copyWith(duration: duration);
-        mediaItem.add(_lastMediaItem!);
-      } catch (e) {
+    _durationSub = player.durationStream.listen(
+      (duration) {
+        try {
+          final item = _lastMediaItem;
+          if (item == null || duration == null || duration <= Duration.zero) {
+            return;
+          }
+          if (item.duration == duration) return;
+          if (_currentIndex < 0 || _currentIndex >= _queue.length) return;
+          if (_queue[_currentIndex].id != item.id) return;
+          _lastMediaItem = item.copyWith(duration: duration);
+          mediaItem.add(_lastMediaItem!);
+        } catch (e) {
+          debugPrint('Duration stream error: $e');
+        }
+      },
+      onError: (Object e) {
         debugPrint('Duration stream error: $e');
-      }
-    }, onError: (Object e) {
-      debugPrint('Duration stream error: $e');
-    });
+      },
+    );
 
-    _currentIndexSub = player.currentIndexStream.listen((index) {
-      try {
-        if (index == null || index < 0 || index >= _queue.length) return;
-        _currentIndex = index;
-        if (!_suppressCurrentSongEvents) {
-          _emitCurrentSong();
+    _currentIndexSub = player.currentIndexStream.listen(
+      (index) {
+        try {
+          if (index == null || index < 0 || index >= _queue.length) return;
+          _skipInProgress = false;
+          _currentIndex = index;
+          if (!_suppressCurrentSongEvents) {
+            _emitCurrentSong();
+          }
+          playbackState.add(
+            playbackState.value.copyWith(
+              queueIndex: index,
+              systemActions: {MediaAction.seek},
+              androidCompactActionIndices: const [0, 1, 2],
+            ),
+          );
+        } catch (e) {
+          debugPrint('Current index stream error: $e');
         }
-        playbackState.add(playbackState.value.copyWith(
-          queueIndex: index,
-          systemActions: {MediaAction.seek},
-          androidCompactActionIndices: const [0, 1, 2],
-        ));
-      } catch (e) {
+      },
+      onError: (Object e) {
         debugPrint('Current index stream error: $e');
-      }
-    }, onError: (Object e) {
-      debugPrint('Current index stream error: $e');
-    });
+      },
+    );
 
-    _playerStateSub = player.playerStateStream.listen((state) {
-      try {
-        final processingState = _mapProcessingState(state.processingState);
-        playbackState.add(playbackState.value.copyWith(
-          playing: state.playing,
-          processingState: processingState,
-          controls: [
-            MediaControl.skipToPrevious,
-            if (state.playing) MediaControl.pause else MediaControl.play,
-            MediaControl.skipToNext,
-          ],
-          updatePosition: player.position,
-          bufferedPosition: player.bufferedPosition,
-          speed: 1.0,
-          queueIndex: _currentIndex,
-          systemActions: {MediaAction.seek},
-          androidCompactActionIndices: const [0, 1, 2],
-        ));
-      } catch (e) {
-        debugPrint('Player state stream error: $e');
-      }
-    }, onError: (Object e) {
-      debugPrint('Player state stream error: $e');
-    });
-
-    _processingStateSub = player.processingStateStream.listen((state) {
-      try {
-        if (state == ProcessingState.completed) {
-          _finishQueue();
+    _playerStateSub = player.playerStateStream.listen(
+      (state) {
+        try {
+          final processingState = _mapProcessingState(state.processingState);
+          playbackState.add(
+            playbackState.value.copyWith(
+              playing: state.playing,
+              processingState: processingState,
+              controls: [
+                MediaControl.skipToPrevious,
+                if (state.playing) MediaControl.pause else MediaControl.play,
+                MediaControl.skipToNext,
+              ],
+              updatePosition: player.position,
+              bufferedPosition: player.bufferedPosition,
+              speed: 1.0,
+              queueIndex: _currentIndex,
+              systemActions: {MediaAction.seek},
+              androidCompactActionIndices: const [0, 1, 2],
+            ),
+          );
+        } catch (e) {
+          debugPrint('Player state stream error: $e');
         }
-      } catch (e) {
+      },
+      onError: (Object e) {
+        debugPrint('Player state stream error: $e');
+      },
+    );
+
+    _processingStateSub = player.processingStateStream.listen(
+      (state) {
+        try {
+          if (state == ProcessingState.completed) {
+            _finishQueue();
+          }
+        } catch (e) {
+          debugPrint('Processing state stream error: $e');
+        }
+      },
+      onError: (Object e) {
         debugPrint('Processing state stream error: $e');
+      },
+    );
+
+    _initCrossfade();
+  }
+
+  void _initCrossfade() {
+    try {
+      final settings = HiveStorage.getSettings();
+      _crossfadeEnabled = settings.crossfadeEnabled;
+      _crossfadeDurationMs = settings.crossfadeDurationMs;
+    } catch (e) {
+      debugPrint('Failed to load crossfade settings: $e');
+    }
+
+    _currentIndexSub?.cancel();
+    _currentIndexSub = player.currentIndexStream.listen(
+      (index) {
+        try {
+          if (index == null || index < 0 || index >= _queue.length) return;
+          final wasSkipping = _skipInProgress;
+          _skipInProgress = false;
+          final prevIndex = _currentIndex;
+          _currentIndex = index;
+
+          if (_crossfadeEnabled &&
+              prevIndex != index &&
+              _awaitingTrackChange &&
+              !wasSkipping) {
+            unawaited(_completeCrossfade(index));
+          } else if (!_isCrossfading && !_awaitingTrackChange) {
+            unawaited(_preloadNextTrack());
+          }
+
+          if (!_suppressCurrentSongEvents) {
+            _emitCurrentSong();
+          }
+          playbackState.add(
+            playbackState.value.copyWith(
+              queueIndex: index,
+              systemActions: {MediaAction.seek},
+              androidCompactActionIndices: const [0, 1, 2],
+            ),
+          );
+        } catch (e) {
+          debugPrint('Current index stream error: $e');
+        }
+      },
+      onError: (Object e) {
+        debugPrint('Current index stream error: $e');
+      },
+    );
+  }
+
+  void updateCrossfadeSettings() {
+    try {
+      final settings = HiveStorage.getSettings();
+      final settingsChanged =
+          _crossfadeEnabled != settings.crossfadeEnabled ||
+          _crossfadeDurationMs != settings.crossfadeDurationMs;
+      _crossfadeEnabled = settings.crossfadeEnabled;
+      _crossfadeDurationMs = settings.crossfadeDurationMs;
+      if (!_crossfadeEnabled || settingsChanged) {
+        _cancelCrossfade();
+        _restoreVolume();
       }
-    }, onError: (Object e) {
-      debugPrint('Processing state stream error: $e');
+      if (_crossfadeEnabled) unawaited(_preloadNextTrack());
+    } catch (e) {
+      debugPrint('Failed to update crossfade settings: $e');
+    }
+  }
+
+  void _startCrossfadeMonitor() {
+    if (!_crossfadeEnabled ||
+        !player.playing ||
+        _isCrossfading ||
+        _awaitingTrackChange ||
+        _crossfadeTimer?.isActive == true) {
+      return;
+    }
+
+    _crossfadeTimer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+      _checkCrossfade();
     });
+  }
+
+  void _checkCrossfade() {
+    if (!_crossfadeEnabled ||
+        !player.playing ||
+        _isCrossfading ||
+        _awaitingTrackChange) {
+      return;
+    }
+
+    final pos = player.position;
+    final dur = player.duration;
+    if (dur == null || dur <= Duration.zero) return;
+
+    final remaining = dur - pos;
+    final crossfadeDur = Duration(milliseconds: _crossfadeDurationMs);
+
+    if (remaining <= crossfadeDur && remaining > Duration.zero) {
+      final nextIndex = _nextCrossfadeIndex();
+      if (nextIndex == null) return;
+      if (_preloadedCrossfadeIndex != nextIndex) {
+        unawaited(_preloadNextTrack());
+        return;
+      }
+      _fadeOut(remaining);
+    }
+  }
+
+  int? _nextCrossfadeIndex() {
+    if (_queue.length < 2) return null;
+    final nextIndex = _currentIndex + 1;
+    if (nextIndex < _queue.length) return nextIndex;
+    final settings = HiveStorage.getSettings();
+    return _repeatMode != AudioServiceRepeatMode.none ||
+            settings.autoplayEnabled
+        ? 0
+        : null;
+  }
+
+  Future<void> _preloadNextTrack() async {
+    if (!_crossfadeEnabled || _isCrossfading || _awaitingTrackChange) return;
+    final nextIndex = _nextCrossfadeIndex();
+    if (nextIndex == null || nextIndex == _preloadedCrossfadeIndex) return;
+    try {
+      await _crossfadePlayer.setAudioSource(
+        _songToAudioSource(_queue[nextIndex]),
+      );
+      await _crossfadePlayer.setVolume(0.0);
+      _preloadedCrossfadeIndex = nextIndex;
+    } catch (e) {
+      _preloadedCrossfadeIndex = null;
+      debugPrint('Failed to preload crossfade track: $e');
+    }
+  }
+
+  void _fadeOut(Duration remaining) {
+    if (_isCrossfading) return;
+    _isCrossfading = true;
+
+    if (_preloadedCrossfadeIndex != _nextCrossfadeIndex()) {
+      _isCrossfading = false;
+      return;
+    }
+
+    final steps = 10;
+    final stepMs = remaining.inMilliseconds ~/ steps;
+    // A 10-step fade cannot finish before a track transition when fewer than
+    // 100 ms remain. Completing it immediately avoids applying fade-out
+    // volume changes to the next song.
+    if (stepMs < 10) {
+      unawaited(_crossfadePlayer.play());
+      player.setVolume(0.0);
+      _crossfadePlayer.setVolume(_userVolume);
+      _isCrossfading = false;
+      _awaitingTrackChange = true;
+      return;
+    }
+
+    int step = 0;
+    unawaited(_crossfadePlayer.play());
+    _fadeOutTimer = Timer.periodic(
+      Duration(milliseconds: stepMs.clamp(10, 100)),
+      (timer) {
+        step++;
+        final t = step / steps;
+        final vol = _userVolume * (1.0 - t.clamp(0.0, 1.0));
+        player.setVolume(vol.clamp(0.0, 1.0));
+        _crossfadePlayer.setVolume((_userVolume * t).clamp(0.0, 1.0));
+
+        if (step >= steps) {
+          timer.cancel();
+          _fadeOutTimer = null;
+          _isCrossfading = false;
+          _awaitingTrackChange = true;
+        }
+      },
+    );
+  }
+
+  Future<void> _completeCrossfade(int index) async {
+    try {
+      if (_crossfadePlayer.playing && _preloadedCrossfadeIndex == index) {
+        await player.seek(_crossfadePlayer.position, index: index);
+        await player.setVolume(_userVolume);
+        await _crossfadePlayer.stop();
+      } else {
+        await player.setVolume(_userVolume);
+      }
+    } catch (e) {
+      debugPrint('Failed to complete crossfade: $e');
+      await player.setVolume(_userVolume);
+    } finally {
+      _preloadedCrossfadeIndex = null;
+      _awaitingTrackChange = false;
+      _isCrossfading = false;
+      unawaited(_preloadNextTrack());
+    }
+  }
+
+  void _cancelCrossfade() {
+    _crossfadeTimer?.cancel();
+    _fadeOutTimer?.cancel();
+    _fadeOutTimer = null;
+    if (_crossfadePlayer.playing) unawaited(_crossfadePlayer.stop());
+    _isCrossfading = false;
+    _awaitingTrackChange = false;
+  }
+
+  void _restoreVolume() {
+    player.setVolume(_userVolume);
   }
 
   Duration get position => player.position;
@@ -151,7 +411,10 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   AudioServiceRepeatMode get currentRepeatMode => _repeatMode;
 
   void setVolume(double volume) {
-    player.setVolume(volume);
+    _userVolume = volume;
+    if (!_isCrossfading) {
+      player.setVolume(volume);
+    }
   }
 
   Future<void> _buildSource() async {
@@ -161,7 +424,10 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     );
   }
 
-  Future<void> setQueue(List<SongEntity> songs, {SongEntity? initialSong}) async {
+  Future<void> setQueue(
+    List<SongEntity> songs, {
+    SongEntity? initialSong,
+  }) async {
     // Bump the generation counter so any in-flight setQueue() knows it is stale.
     final seq = ++_queueSetSeq;
 
@@ -170,12 +436,14 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       _currentIndex = 0;
       queue.add(const []);
       await player.stop();
-      playbackState.add(playbackState.value.copyWith(
-        playing: false,
-        processingState: AudioProcessingState.idle,
-        systemActions: {MediaAction.seek},
-        androidCompactActionIndices: const [0, 1, 2],
-      ));
+      playbackState.add(
+        playbackState.value.copyWith(
+          playing: false,
+          processingState: AudioProcessingState.idle,
+          systemActions: {MediaAction.seek},
+          androidCompactActionIndices: const [0, 1, 2],
+        ),
+      );
       return;
     }
 
@@ -200,7 +468,11 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     if (_source == null) return;
 
     _wantPlaying = true;
-    await player.setAudioSource(_source!, initialIndex: startIndex, initialPosition: Duration.zero);
+    await player.setAudioSource(
+      _source!,
+      initialIndex: startIndex,
+      initialPosition: Duration.zero,
+    );
 
     await Future.delayed(const Duration(milliseconds: 50));
 
@@ -209,6 +481,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
     if (_wantPlaying) {
       await player.play();
+      unawaited(_preloadNextTrack());
     }
   }
 
@@ -218,8 +491,11 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }) async {
     if (_source == null || _queue.isEmpty) return;
     _wantPlaying = true;
-    await player.setAudioSource(_source!,
-        initialIndex: initialIndex, initialPosition: initialPosition);
+    await player.setAudioSource(
+      _source!,
+      initialIndex: initialIndex,
+      initialPosition: initialPosition,
+    );
   }
 
   Future<void> _playAt(int index) async {
@@ -259,6 +535,9 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   Future<void> playSong(SongEntity song) async {
+    _cancelCrossfade();
+    _restoreVolume();
+    _skipInProgress = true;
     if (player.processingState == ProcessingState.idle) {
       final index = _queue.indexWhere((s) => s.id == song.id);
       if (index != -1) {
@@ -268,7 +547,7 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       }
       return;
     }
-    
+
     _wantPlaying = true;
     final index = _queue.indexWhere((s) => s.id == song.id);
     if (index != -1 && index != _currentIndex) {
@@ -288,51 +567,74 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       );
     }
     await player.play();
+    if (_crossfadeEnabled) {
+      _startCrossfadeMonitor();
+      unawaited(_preloadNextTrack());
+    }
   }
 
   @override
   Future<void> pause() async {
     _wantPlaying = false;
     _lastPosition = player.position;
+    _cancelCrossfade();
+    _restoreVolume();
     await player.pause();
-    playbackState.add(playbackState.value.copyWith(
-      playing: false,
-      systemActions: {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1, 2],
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        playing: false,
+        systemActions: {MediaAction.seek},
+        androidCompactActionIndices: const [0, 1, 2],
+      ),
+    );
   }
 
   @override
   Future<void> stop() async {
     _wantPlaying = false;
     _lastPosition = player.position;
+    _cancelCrossfade();
+    _restoreVolume();
     await player.stop();
-    playbackState.add(playbackState.value.copyWith(
-      processingState: AudioProcessingState.idle,
-      controls: [],
-      systemActions: {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1, 2],
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        processingState: AudioProcessingState.idle,
+        controls: [],
+        systemActions: {MediaAction.seek},
+        androidCompactActionIndices: const [0, 1, 2],
+      ),
+    );
   }
 
   @override
   Future<void> onTaskRemoved() async {
     _wantPlaying = false;
     _lastPosition = player.position;
+    _cancelCrossfade();
+    _restoreVolume();
     await player.stop();
-    playbackState.add(playbackState.value.copyWith(
-      processingState: AudioProcessingState.idle,
-      controls: [],
-      systemActions: {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1, 2],
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        processingState: AudioProcessingState.idle,
+        controls: [],
+        systemActions: {MediaAction.seek},
+        androidCompactActionIndices: const [0, 1, 2],
+      ),
+    );
   }
 
   @override
-  Future<void> seek(Duration position) => player.seek(position);
+  Future<void> seek(Duration position) {
+    _cancelCrossfade();
+    _restoreVolume();
+    return player.seek(position);
+  }
 
   @override
   Future<void> skipToNext() async {
+    _cancelCrossfade();
+    _restoreVolume();
+    _skipInProgress = true;
     if (_queue.isEmpty) return;
 
     final next = _currentIndex + 1;
@@ -351,13 +653,16 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   @override
   Future<void> skipToPrevious() async {
+    _cancelCrossfade();
+    _restoreVolume();
+    _skipInProgress = true;
     if (_queue.isEmpty) return;
-    
+
     if (player.position.inSeconds > 3) {
       await player.seek(Duration.zero);
       return;
     }
-    
+
     final prev = _currentIndex - 1;
     if (prev >= 0) {
       await _playAt(prev);
@@ -368,6 +673,9 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   @override
   Future<void> skipToQueueItem(int index) async {
+    _cancelCrossfade();
+    _restoreVolume();
+    _skipInProgress = true;
     if (index < 0 || index >= _queue.length) return;
     await _playAt(index);
   }
@@ -377,6 +685,8 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
     if (autoplayEnabled) {
       // Restart from the beginning, preserving shuffle state.
+      _cancelCrossfade();
+      _restoreVolume();
       _wantPlaying = true;
       if (_isShuffled) {
         _queue.shuffle();
@@ -387,22 +697,28 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         // Source failed to rebuild — fall through to stopping.
         _wantPlaying = false;
         if (player.playing) await player.pause();
-        playbackState.add(playbackState.value.copyWith(
-          playing: false,
-          processingState: AudioProcessingState.completed,
-          controls: [
-            MediaControl.skipToPrevious,
-            MediaControl.play,
-            MediaControl.skipToNext,
-          ],
-          updatePosition: player.duration ?? Duration.zero,
-          bufferedPosition: player.bufferedPosition,
-          systemActions: {MediaAction.seek},
-          androidCompactActionIndices: const [0, 1, 2],
-        ));
+        playbackState.add(
+          playbackState.value.copyWith(
+            playing: false,
+            processingState: AudioProcessingState.completed,
+            controls: [
+              MediaControl.skipToPrevious,
+              MediaControl.play,
+              MediaControl.skipToNext,
+            ],
+            updatePosition: player.duration ?? Duration.zero,
+            bufferedPosition: player.bufferedPosition,
+            systemActions: {MediaAction.seek},
+            androidCompactActionIndices: const [0, 1, 2],
+          ),
+        );
         return;
       }
-      await player.setAudioSource(_source!, initialIndex: 0, initialPosition: Duration.zero);
+      await player.setAudioSource(
+        _source!,
+        initialIndex: 0,
+        initialPosition: Duration.zero,
+      );
       await player.play();
       _emitCurrentSong();
       return;
@@ -415,19 +731,21 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     if (player.playing) {
       await player.pause();
     }
-    playbackState.add(playbackState.value.copyWith(
-      playing: false,
-      processingState: AudioProcessingState.completed,
-      controls: [
-        MediaControl.skipToPrevious,
-        MediaControl.play,
-        MediaControl.skipToNext,
-      ],
-      updatePosition: player.duration ?? Duration.zero,
-      bufferedPosition: player.bufferedPosition,
-      systemActions: {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1, 2],
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        playing: false,
+        processingState: AudioProcessingState.completed,
+        controls: [
+          MediaControl.skipToPrevious,
+          MediaControl.play,
+          MediaControl.skipToNext,
+        ],
+        updatePosition: player.duration ?? Duration.zero,
+        bufferedPosition: player.bufferedPosition,
+        systemActions: {MediaAction.seek},
+        androidCompactActionIndices: const [0, 1, 2],
+      ),
+    );
   }
 
   Future<void> setShuffle(bool enabled) async {
@@ -444,7 +762,12 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     final currentPosition = player.position;
 
     if (enabled && !_isShuffled) {
-      _orderedQueue = List.of(_queue);
+      // Only capture the original order on the first shuffle enable.
+      // Do not overwrite _orderedQueue if we are toggling while already
+      // shuffled — that would lose the true original order.
+      if (_orderedQueue.isEmpty) {
+        _orderedQueue = List.of(_queue);
+      }
       _queue = List.of(_queue)..shuffle();
     } else if (!enabled && _isShuffled) {
       if (_orderedQueue.isNotEmpty) {
@@ -492,7 +815,10 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     queue.add(_queue.map(_songToMediaItem).toList());
   }
 
-  Future<void> _rebuildSourceKeepingPlayback(bool wasPlaying, Duration position) async {
+  Future<void> _rebuildSourceKeepingPlayback(
+    bool wasPlaying,
+    Duration position,
+  ) async {
     if (_source == null || _queue.isEmpty) return;
     if (player.processingState == ProcessingState.idle) return;
 
@@ -574,23 +900,30 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
     // initial play, manual skips and auto-advance alike).
     if (_currentIndex != _countedIndex) {
       _countedIndex = _currentIndex;
-      unawaited(HiveStorage.incrementPlayCount(song.id).catchError((Object e) {
-        debugPrint('Failed to increment play count for ${song.id}: $e');
-      }));
+      unawaited(
+        HiveStorage.incrementPlayCount(song.id).catchError((Object e) {
+          debugPrint('Failed to increment play count for ${song.id}: $e');
+        }),
+      );
     }
   }
 
   /// Adds [songs] to the end of the current queue (or right after the current
   /// song when [playNext] is true) without interrupting playback. Songs
   /// already in the queue are skipped.
-  Future<void> addToQueue(List<SongEntity> songs, {bool playNext = false}) async {
+  Future<void> addToQueue(
+    List<SongEntity> songs, {
+    bool playNext = false,
+  }) async {
     if (songs.isEmpty) return;
     if (_queue.isEmpty) {
       await setQueue(songs);
       return;
     }
 
-    final newSongs = songs.where((s) => !_queue.any((e) => e.id == s.id)).toList();
+    final newSongs = songs
+        .where((s) => !_queue.any((e) => e.id == s.id))
+        .toList();
     if (newSongs.isEmpty) return;
 
     final insertIndex = playNext ? _currentIndex + 1 : _queue.length;
@@ -608,10 +941,9 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
         // Gapless: insert the new items into the loaded source at the same
         // position. Inserting at/after the current index does not disturb
         // the currently playing item.
-        await src.insertAll(
-          insertIndex,
-          [for (final s in newSongs) _songToAudioSource(s)],
-        );
+        await src.insertAll(insertIndex, [
+          for (final s in newSongs) _songToAudioSource(s),
+        ]);
         queue.add(_queue.map(_songToMediaItem).toList());
         return;
       } catch (e) {
@@ -631,22 +963,28 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
   }
 
   void _notifyShuffleMode() {
-    playbackState.add(playbackState.value.copyWith(
-      shuffleMode: _isShuffled ? AudioServiceShuffleMode.all : AudioServiceShuffleMode.none,
-      systemActions: {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1, 2],
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        shuffleMode: _isShuffled
+            ? AudioServiceShuffleMode.all
+            : AudioServiceShuffleMode.none,
+        systemActions: {MediaAction.seek},
+        androidCompactActionIndices: const [0, 1, 2],
+      ),
+    );
   }
 
   @override
   Future<void> setRepeatMode(AudioServiceRepeatMode repeatMode) async {
     _repeatMode = repeatMode;
     await player.setLoopMode(_mapRepeatMode(repeatMode));
-    playbackState.add(playbackState.value.copyWith(
-      repeatMode: repeatMode,
-      systemActions: {MediaAction.seek},
-      androidCompactActionIndices: const [0, 1, 2],
-    ));
+    playbackState.add(
+      playbackState.value.copyWith(
+        repeatMode: repeatMode,
+        systemActions: {MediaAction.seek},
+        androidCompactActionIndices: const [0, 1, 2],
+      ),
+    );
   }
 
   MediaItem _songToMediaItem(SongEntity song) {
@@ -655,7 +993,9 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
       title: song.title,
       artist: song.artist,
       album: song.album,
-      duration: Duration(milliseconds: song.durationMs > 0 ? song.durationMs : 1),
+      duration: Duration(
+        milliseconds: song.durationMs > 0 ? song.durationMs : 1,
+      ),
       artUri: song.coverArtPath != null && song.coverArtPath!.isNotEmpty
           ? Uri.file(song.coverArtPath!)
           : null,
@@ -712,15 +1052,17 @@ class AudioPlayerHandler extends BaseAudioHandler with QueueHandler, SeekHandler
 
   SongEntity? get currentSong =>
       _queue.isNotEmpty && _currentIndex < _queue.length
-          ? _queue[_currentIndex]
-          : null;
+      ? _queue[_currentIndex]
+      : null;
 
   void dispose() {
+    _crossfadeTimer?.cancel();
     _playerStateSub?.cancel();
     _processingStateSub?.cancel();
     _currentIndexSub?.cancel();
     _positionSub?.cancel();
     _durationSub?.cancel();
     player.dispose();
+    _crossfadePlayer.dispose();
   }
 }

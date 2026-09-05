@@ -423,8 +423,10 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
         } else {
           await _durationPlayer.setFilePath(taggerPath);
         }
-        await Future.delayed(const Duration(milliseconds: 300));
-        final dur = _durationPlayer.duration;
+        // Wait until the player has finished loading before reading duration.
+        // A fixed 300ms delay is unreliable for large files or slow storage;
+        // listening to the duration stream guarantees we get a valid value.
+        final dur = await _waitForDuration(_durationPlayer);
         if (dur != null && dur.inMilliseconds > 0) {
           durationMs = dur.inMilliseconds;
         }
@@ -690,6 +692,24 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
       grouped.putIfAbsent(song.artist, () => []).add(song);
     }
     return grouped;
+  }
+
+  /// Waits for the player to report a non-zero duration, with a 10s timeout.
+  /// Returns null if the duration is not available within the timeout.
+  Future<Duration?> _waitForDuration(AudioPlayer player, {Duration timeout = const Duration(seconds: 10)}) async {
+    Completer<Duration?> completer = Completer<Duration?>();
+    final sub = player.durationStream.listen((dur) {
+      if (dur != null && dur.inMilliseconds > 0 && !completer.isCompleted) {
+        completer.complete(dur);
+      }
+    }, onError: (Object e) {
+      if (!completer.isCompleted) completer.complete(null);
+    });
+    try {
+      return await completer.future.timeout(timeout, onTimeout: () => null);
+    } finally {
+      await sub.cancel();
+    }
   }
 
   @override

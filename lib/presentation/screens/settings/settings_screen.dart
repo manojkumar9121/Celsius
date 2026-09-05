@@ -7,6 +7,7 @@ import 'package:celsuis/presentation/providers/library_provider.dart';
 import 'package:celsuis/domain/entities/app_settings.dart';
 import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
 import 'package:celsuis/core/utils/color_utils.dart';
+import 'package:celsuis/main.dart' as app;
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -15,6 +16,13 @@ class SettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
+
+    ref.listen<AppSettings>(settingsProvider, (prev, next) {
+      if (prev?.crossfadeEnabled != next.crossfadeEnabled ||
+          prev?.crossfadeDurationMs != next.crossfadeDurationMs) {
+        app.audioHandler?.updateCrossfadeSettings();
+      }
+    });
 
     return Scaffold(
       appBar: AppBar(
@@ -169,6 +177,45 @@ class SettingsScreen extends ConsumerWidget {
                 value: settings.autoplayEnabled,
                 onChanged: (value) => notifier.toggleAutoplay(value),
               ),
+              SwitchListTile(
+                title: const Text('Crossfade'),
+                subtitle: Text(
+                  settings.crossfadeEnabled
+                      ? 'Fade between songs (${settings.crossfadeDurationMs}ms)'
+                      : 'Off',
+                ),
+                value: settings.crossfadeEnabled,
+                onChanged: (value) => notifier.toggleCrossfade(value),
+              ),
+              if (settings.crossfadeEnabled)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.timer, size: 20),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Slider(
+                          value: settings.crossfadeDurationMs.toDouble(),
+                          onChanged: (value) =>
+                              notifier.setCrossfadeDuration(value.round()),
+                          min: 100,
+                          max: 10000,
+                          divisions: 99,
+                          label: '${settings.crossfadeDurationMs}ms',
+                        ),
+                      ),
+                      SizedBox(
+                        width: 60,
+                        child: Text(
+                          '${settings.crossfadeDurationMs}ms',
+                          style: Theme.of(context).textTheme.bodySmall,
+                          textAlign: TextAlign.right,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               SwitchListTile(
                 title: const Text('Dismiss on Pause'),
                 subtitle: const Text('Remove notification when paused'),
