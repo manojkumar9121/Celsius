@@ -425,6 +425,9 @@ class AudioPlayerHandler extends BaseAudioHandler
 
   Future<void> _performTransition(int index) async {
     if (_crossfadeState != _CrossfadeState.transitioning) return;
+    // Capture the crossfade player's position before stopping it so the main
+    // player picks up song B from where the crossfade left off.
+    final crossfadePosition = _crossfadePlayer.position;
     // Stop the crossfade player first to avoid double audio.
     try {
       await _crossfadePlayer.stop();
@@ -432,11 +435,9 @@ class AudioPlayerHandler extends BaseAudioHandler
       debugPrint('Failed to stop crossfade player: $e');
     }
     _preloadedCrossfadeIndex = null;
-    // Explicitly seek main player to next track at position 0.
-    // This is the single authoritative transition — not dependent on
-    // currentIndexStream or processingStateStream.
+    // Explicitly seek main player to next track at the crossfade position.
     try {
-      await player.seek(Duration.zero, index: index);
+      await player.seek(crossfadePosition, index: index);
       await player.setVolume(_userVolume);
     } catch (e) {
       debugPrint('Failed to perform crossfade transition: $e');
