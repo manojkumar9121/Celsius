@@ -54,6 +54,9 @@ class AudioPlayerHandler extends BaseAudioHandler
   double _userVolume = 1.0;
   bool _skipInProgress = false;
   _CrossfadeState _crossfadeState = _CrossfadeState.idle;
+  // True while our state machine is actively performing the handoff.
+  // Prevents positionDiscontinuityStream autoAdvance from cancelling our own transition.
+  bool _owningTransition = false;
 
   AudioPlayerHandler() {
     try {
@@ -195,13 +198,20 @@ class AudioPlayerHandler extends BaseAudioHandler
     _positionDiscontinuitySub =
         player.positionDiscontinuityStream.listen(
       (discontinuity) {
-        // If the player auto-advances while we're in a crossfade transition,
-        // cancel the crossfade to let the auto-advance own the transition.
-        if (discontinuity.reason == PositionDiscontinuityReason.autoAdvance &&
-            _crossfadeState == _CrossfadeState.fading ||
-            _crossfadeState == _CrossfadeState.transitioning) {
-           debugPrint('Crossfade: auto-advance detected, cancelling');
-           _cancelCrossfade(restoreVolume: true);
+        if (discontinuity.reason == PositionDiscontinuityReason.autoAdvance) {
+          if (_owningTransition) {
+            debugPrint(
+              'Crossfade: autoAdvance during our transition — ignoring (state=${_crossfadeState})',
+            );
+            return;
+          }
+          if (_crossfadeState == _CrossfadeState.fading ||
+              _crossfadeState == _CrossfadeState.transitioning) {
+            debugPrint(
+              'Crossfade: unexpected autoAdvance (state=${_crossfadeState}), cancelling',
+            );
+            _cancelCrossfade(restoreVolume: true);
+          }
         }
       },
       onError: (Object e) {
@@ -306,15 +316,22 @@ class AudioPlayerHandler extends BaseAudioHandler
 
     final remaining = dur - pos;
     final crossfadeDur = Duration(milliseconds: _crossfadeDurationMs);
+    final nextIndex = _nextCrossfadeIndex();
+
+    debugPrint(
+      'Crossfade: check idx=$_currentIndex rem=${remaining.inSeconds}s '
+      'fadeDur=${_crossfadeDurationMs}ms next=$nextIndex state=$_crossfadeState',
+    );
 
     if (remaining <= crossfadeDur && remaining > Duration.zero) {
-      final nextIndex = _nextCrossfadeIndex();
       if (nextIndex == null) return;
       if (_preloadedCrossfadeIndex != nextIndex) {
+        debugPrint('Crossfade: entering preloading state');
         _crossfadeState = _CrossfadeState.preloading;
         unawaited(_preloadNextTrack());
         return;
       }
+      debugPrint('Crossfade: starting fade out (remaining=${remaining.inSeconds}s)');
       _startFadeOut(remaining);
     }
   }
@@ -386,6 +403,11 @@ class AudioPlayerHandler extends BaseAudioHandler
     final stepMs = (effectiveFadeMs / steps).clamp(5.0, 50.0).toInt();
     int step = 0;
 
+    debugPrint(
+      'Crossfade: fade started idx=$_currentIndex next=$nextIndex '
+      'dur=${_crossfadeDurationMs}ms steps=$steps stepMs=$stepMs',
+    );
+
     // Start the next track on the crossfade player.
     unawaited(_crossfadePlayer.play());
 
@@ -407,9 +429,16 @@ class AudioPlayerHandler extends BaseAudioHandler
         player.setVolume(currentVol);
         _crossfadePlayer.setVolume(nextVol);
 
+        debugPrint(
+          'Crossfade: step $step/$steps t=$rawT '
+          'A=${currentVol.toStringAsFixed(2)} B=${nextVol.toStringAsFixed(2)} '
+          'cfPos=${_crossfadePlayer.position}',
+        );
+
         if (step >= steps) {
           timer.cancel();
           _fadeOutTimer = null;
+          debugPrint('Crossfade: fade complete, handoff to transitioning');
           _crossfadeState = _CrossfadeState.transitioning;
           unawaited(_performTransition(nextIndex));
         }
@@ -425,6 +454,10 @@ class AudioPlayerHandler extends BaseAudioHandler
 
   Future<void> _performTransition(int index) async {
     if (_crossfadeState != _CrossfadeState.transitioning) return;
+    debugPrint(
+      'Crossfade: _performTransition idx=$index pos=${_crossfadePlayer.position}',
+    );
+    _owningTransition = true;
     // Capture the crossfade player's position before stopping it so the main
     // player picks up song B from where the crossfade left off.
     final crossfadePosition = _crossfadePlayer.position;
@@ -443,6 +476,7 @@ class AudioPlayerHandler extends BaseAudioHandler
       debugPrint('Failed to perform crossfade transition: $e');
       await player.setVolume(_userVolume).catchError((Object _) {});
     }
+    _owningTransition = false;
     _crossfadeState = _CrossfadeState.idle;
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
@@ -450,6 +484,10 @@ class AudioPlayerHandler extends BaseAudioHandler
   }
 
   Future<void> _completeCrossfade(int index) async {
+    debugPrint(
+      'Crossfade: _completeCrossfade idx=$index state=$_crossfadeState '
+      'owning=$_owningTransition',
+    );
     // This is called when currentIndexStream fires after our explicit
     // transition. Clean up any remaining state.
     try {
@@ -465,6 +503,10 @@ class AudioPlayerHandler extends BaseAudioHandler
   }
 
   void _cancelCrossfade({bool restoreVolume = true}) {
+    debugPrint(
+      'Crossfade: cancel state=$_crossfadeState owning=$_owningTransition '
+      'cfPlaying=${_crossfadePlayer.playing} cfPos=${_crossfadePlayer.position}',
+    );
     _crossfadeTimer?.cancel();
     _crossfadeTimer = null;
     _fadeOutTimer?.cancel();
