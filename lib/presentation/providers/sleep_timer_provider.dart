@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
 
 final sleepTimerProvider = StateNotifierProvider<SleepTimerNotifier, SleepTimerState>((ref) {
   return SleepTimerNotifier(ref);

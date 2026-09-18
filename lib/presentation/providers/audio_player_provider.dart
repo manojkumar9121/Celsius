@@ -3,11 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/services/background_audio_service.dart';
-import 'package:celsuis/services/widget_service.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/services/background_audio_service.dart';
+import 'package:celsius/services/widget_service.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
 
 final audioHandlerProvider = StateProvider<AudioPlayerHandler?>((ref) => null);
 
@@ -32,6 +32,10 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   /// Applied as soon as the handler becomes available.
   SongEntity? _pendingSong;
   List<SongEntity>? _pendingQueue;
+  /// Generation counter for the UI queue order. Bumped on every local queue
+  /// mutation so stale async completions (e.g. a slow reorder overtaken by a
+  /// newer drag or a fresh playSong) never overwrite newer state.
+  int _queueVersion = 0;
 
   AudioPlayerNotifier({WidgetService? widgetService})
       : _widgetService = widgetService ?? WidgetService(),
@@ -124,6 +128,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   Future<void> playSong(SongEntity song, List<SongEntity>? queue) async {
     final resolvedQueue = queue ?? [song];
 
+    _queueVersion++;
     state = state.copyWith(
       currentSong: song,
       isPlaying: false,
@@ -229,6 +234,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     final handler = _handler;
     if (handler == null) return;
     await handler.addToQueue([song], playNext: playNext);
+    _queueVersion++;
     state = state.copyWith(queue: List.of(handler.songs));
   }
 
@@ -252,6 +258,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     await handler.setShuffle(enabled);
     // Re-sync the UI queue with the (possibly reordered) handler queue so
     // skipToQueueItem/reorderQueue indices always agree.
+    _queueVersion++;
     state = state.copyWith(
       isShuffled: enabled,
       queue: List.of(handler.songs),
@@ -286,28 +293,60 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   }
 
   void reorderQueue(int oldIndex, int newIndex) {
-    // oldIndex/newIndex arrive pre-adjusted (onReorderItem semantics): the
-    // item was already removed from the list before newIndex was computed.
+    // oldIndex/newIndex use onReorderItem semantics (pre-adjusted: the item
+    // was already removed before newIndex was computed), so the move is a
+    // plain removeAt/insert with no extra index adjustment.
     if (oldIndex < 0 || oldIndex >= state.queue.length) return;
-    if (newIndex < 0 || newIndex > state.queue.length) return;
+    if (newIndex < 0 || newIndex >= state.queue.length) return;
+    if (oldIndex == newIndex) return;
+
+    // Optimistic UI update FIRST: ReorderableListView expects its backing
+    // list to reflect the drop synchronously, otherwise the dragged row
+    // snaps back and a second quick drag computes indices against stale
+    // state.
+    final songs = List<SongEntity>.from(state.queue);
+    final song = songs.removeAt(oldIndex);
+    songs.insert(newIndex, song);
+    _queueVersion++;
+    final version = _queueVersion;
+    state = state.copyWith(queue: songs);
 
     final handler = _handler;
-    if (handler == null) {
-      final songs = List<SongEntity>.from(state.queue);
-      final song = songs.removeAt(oldIndex);
-      songs.insert(newIndex, song);
-      state = state.copyWith(queue: songs);
-      return;
-    }
+    if (handler == null) return;
 
+    // The handler owns the authoritative order (and the loaded audio
+    // source). On completion, resync from it instead of replaying the
+    // indices — replaying would double-apply the move whenever the
+    // handler's mediaItem emission already synced state.queue first.
     unawaited(handler.reorderQueue(oldIndex, newIndex).then((_) {
-      final songs = List<SongEntity>.from(state.queue);
-      final song = songs.removeAt(oldIndex);
-      songs.insert(newIndex, song);
-      state = state.copyWith(queue: songs);
+      if (version != _queueVersion) return;
+      _resyncQueueFromHandler();
     }).catchError((Object e) {
       debugPrint('Queue reorder failed: $e');
+      if (version != _queueVersion) return;
+      // Fall back to the handler's order so UI and playback never diverge.
+      _resyncQueueFromHandler();
     }));
+  }
+
+  /// Copies the handler's authoritative queue order into UI state when it
+  /// has actually diverged (avoids needless rebuilds on every call).
+  void _resyncQueueFromHandler() {
+    final handler = _handler;
+    if (handler == null) return;
+    final handlerSongs = handler.songs;
+    final current = state.queue;
+    if (handlerSongs.length != current.length) {
+      state = state.copyWith(queue: List.of(handlerSongs));
+      return;
+    }
+    for (var i = 0; i < handlerSongs.length; i++) {
+      if (!identical(handlerSongs[i], current[i]) &&
+          handlerSongs[i].id != current[i].id) {
+        state = state.copyWith(queue: List.of(handlerSongs));
+        return;
+      }
+    }
   }
 
   @override

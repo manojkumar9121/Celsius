@@ -7,12 +7,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_audio_tagger/flutter_audio_tagger.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/data/local_storage/song_box.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/data/local_storage/song_box.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-const _channel = MethodChannel('com.celsuis.celsuis/audio_scanner');
+const _channel = MethodChannel('com.celsius.celsius/audio_scanner');
 
 /// Durations below this value are suspicious: older builds persisted
 /// MediaStore durations in seconds (e.g. 240 for a 4-minute song) instead

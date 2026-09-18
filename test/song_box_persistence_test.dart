@@ -1,14 +1,14 @@
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:celsuis/data/local_storage/song_box.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsius/data/local_storage/song_box.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
 
 void main() {
   late Directory tempDir;
 
   setUpAll(() async {
-    tempDir = await Directory.systemTemp.createTemp('celsuis_song_box_test');
+    tempDir = await Directory.systemTemp.createTemp('celsius_song_box_test');
     Hive.init(tempDir.path);
     Hive.registerAdapter(SongBoxAdapter());
   });

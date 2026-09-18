@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:celsuis/presentation/providers/playlist_provider.dart';
-import 'package:celsuis/presentation/providers/library_provider.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/presentation/widgets/song_tile.dart';
-import 'package:celsuis/presentation/widgets/song_actions_menu.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/core/widgets/cached_song_image.dart';
+import 'package:celsius/presentation/providers/playlist_provider.dart';
+import 'package:celsius/presentation/providers/library_provider.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/presentation/widgets/song_tile.dart';
+import 'package:celsius/presentation/widgets/song_actions_menu.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/core/widgets/cached_song_image.dart';
 import 'package:go_router/go_router.dart';
 
 class PlaylistDetailScreen extends ConsumerStatefulWidget {

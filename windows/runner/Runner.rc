@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.celsuis" "\0"
-            VALUE "FileDescription", "celsuis" "\0"
+            VALUE "CompanyName", "com.celsius" "\0"
+            VALUE "FileDescription", "celsius" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "celsuis" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.celsuis. All rights reserved." "\0"
-            VALUE "OriginalFilename", "celsuis.exe" "\0"
-            VALUE "ProductName", "celsuis" "\0"
+            VALUE "InternalName", "celsius" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.celsius. All rights reserved." "\0"
+            VALUE "OriginalFilename", "celsius.exe" "\0"
+            VALUE "ProductName", "celsius" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

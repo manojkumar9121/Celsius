@@ -1,5 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
 
 part 'settings_box.g.dart';
 

@@ -1,4 +1,4 @@
-# Celsuis
+# Celsius
 
 A offline-first Flutter music player for Android. Scans your device storage, plays local audio files, and keeps everything in Hive — no cloud, no accounts, no telemetry.
 
@@ -78,7 +78,7 @@ python3 generate_icons.py       # assets/icons/*.png
 
 This repo contains two nearly identical Flutter projects:
 
-- `celsuis/` — active development workspace (has `build/`, `.dart_tool/`)
+- `celsius/` — active development workspace (has `build/`, `.dart_tool/`)
 - `C-clone/` — production copy synced to GitHub
 
-All changes are made in `celsuis/` first and then mirrored to `C-clone/`. Run `pub get`, `build_runner`, `analyze`, and `test` in both after mirroring.
+All changes are made in `celsius/` first and then mirrored to `C-clone/`. Run `pub get`, `build_runner`, `analyze`, and `test` in both after mirroring.

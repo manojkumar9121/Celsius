@@ -6,13 +6,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/services/background_audio_service.dart';
-import 'package:celsuis/services/widget_service.dart';
-import 'package:celsuis/services/waveform_extractor_service.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/app.dart';
-import 'package:celsuis/core/widgets/app_error_boundary.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/services/background_audio_service.dart';
+import 'package:celsius/services/widget_service.dart';
+import 'package:celsius/services/waveform_extractor_service.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/app.dart';
+import 'package:celsius/core/widgets/app_error_boundary.dart';
 
 AudioPlayerHandler? _audioHandlerRef;
 
@@ -48,7 +48,7 @@ Future<void> main() async {
   runApp(
     UncontrolledProviderScope(
       container: appContainer,
-      child: const AppRoot(child: CelsuisApp()),
+      child: const AppRoot(child: CelsiusApp()),
     ),
   );
 
@@ -69,7 +69,7 @@ Future<void> _initAudioStack() async {
     final handler = await AudioService.init(
       builder: () => AudioPlayerHandler(),
       config: AudioServiceConfig(
-        androidNotificationChannelId: 'com.celsuis.celsuis.channel.audio',
+        androidNotificationChannelId: 'com.celsius.celsius.channel.audio',
         androidNotificationChannelName: 'Celsuis Playback',
         androidNotificationChannelDescription: 'Audio playback controls',
         androidNotificationOngoing: settings.notificationOngoing,

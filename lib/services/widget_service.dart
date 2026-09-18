@@ -1,13 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
 
 class WidgetService {
   static final WidgetService _instance = WidgetService._();
   factory WidgetService() => _instance;
   WidgetService._();
 
-  static const _channel = MethodChannel('com.celsuis.celsuis/widget');
+  static const _channel = MethodChannel('com.celsius.celsius/widget');
 
   Function()? onPrevious;
   Function()? onPlayPause;

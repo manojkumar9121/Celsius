@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/presentation/providers/playlist_provider.dart';
+import 'package:celsius/presentation/providers/playlist_provider.dart';
 
 class CreatePlaylistDialog extends StatelessWidget {
   const CreatePlaylistDialog({super.key});

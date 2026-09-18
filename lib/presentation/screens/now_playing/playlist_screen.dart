@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/presentation/providers/playlist_provider.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_widgets.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/presentation/providers/playlist_provider.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_widgets.dart';
 
 class PlaylistScreen extends ConsumerWidget {
   const PlaylistScreen({super.key});

@@ -1,4 +1,4 @@
-name: celsuis
+name: celsius
 description: An offline music player for your local music library.
 publish_to: 'none'
 version: 0.1.0+1

@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:celsuis/core/constants/app_constants.dart';
-import 'package:celsuis/core/widgets/custom_page_transition.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/presentation/providers/settings_provider.dart';
-import 'package:celsuis/presentation/screens/home/home_screen.dart';
-import 'package:celsuis/presentation/screens/library/library_screen.dart';
-import 'package:celsuis/presentation/screens/settings/settings_screen.dart';
-import 'package:celsuis/presentation/screens/now_playing/now_playing_screen.dart';
-import 'package:celsuis/presentation/screens/now_playing/queue_screen.dart';
-import 'package:celsuis/presentation/screens/now_playing/playlist_screen.dart';
-import 'package:celsuis/presentation/screens/now_playing/lyrics_screen.dart';
-import 'package:celsuis/presentation/screens/stats/stats_screen.dart';
-import 'package:celsuis/presentation/screens/playlist/playlist_detail_screen.dart';
-import 'package:celsuis/presentation/widgets/mini_player.dart';
+import 'package:celsius/core/constants/app_constants.dart';
+import 'package:celsius/core/widgets/custom_page_transition.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/presentation/providers/settings_provider.dart';
+import 'package:celsius/presentation/screens/home/home_screen.dart';
+import 'package:celsius/presentation/screens/library/library_screen.dart';
+import 'package:celsius/presentation/screens/settings/settings_screen.dart';
+import 'package:celsius/presentation/screens/now_playing/now_playing_screen.dart';
+import 'package:celsius/presentation/screens/now_playing/queue_screen.dart';
+import 'package:celsius/presentation/screens/now_playing/playlist_screen.dart';
+import 'package:celsius/presentation/screens/now_playing/lyrics_screen.dart';
+import 'package:celsius/presentation/screens/stats/stats_screen.dart';
+import 'package:celsius/presentation/screens/playlist/playlist_detail_screen.dart';
+import 'package:celsius/presentation/widgets/mini_player.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -82,8 +82,8 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-class CelsuisApp extends ConsumerWidget {
-  const CelsuisApp({super.key});
+class CelsiusApp extends ConsumerWidget {
+  const CelsiusApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

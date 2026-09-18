@@ -1,5 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:celsuis/domain/entities/playlist_entity.dart';
+import 'package:celsius/domain/entities/playlist_entity.dart';
 
 part 'playlist_box.g.dart';
 

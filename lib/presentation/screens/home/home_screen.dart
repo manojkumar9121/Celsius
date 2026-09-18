@@ -2,15 +2,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/presentation/providers/library_provider.dart';
-import 'package:celsuis/presentation/providers/playlist_provider.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/domain/entities/playlist_entity.dart';
+import 'package:celsius/presentation/providers/library_provider.dart';
+import 'package:celsius/presentation/providers/playlist_provider.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/domain/entities/playlist_entity.dart';
 import 'package:go_router/go_router.dart';
-import 'package:celsuis/core/widgets/cached_song_image.dart';
-import 'package:celsuis/core/widgets/shimmer.dart';
-import 'package:celsuis/core/widgets/create_playlist_dialog.dart';
+import 'package:celsius/core/widgets/cached_song_image.dart';
+import 'package:celsius/core/widgets/shimmer.dart';
+import 'package:celsius/core/widgets/create_playlist_dialog.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});

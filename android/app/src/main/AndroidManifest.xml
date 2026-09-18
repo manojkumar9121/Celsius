@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
     <application
-        android:label="Celsuis"
+        android:label="Celsius"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
@@ -44,14 +44,14 @@
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </receiver>
-        <receiver android:name="com.celsuis.celsuis.PlayerWidget"
+        <receiver android:name="com.celsius.celsius.PlayerWidget"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-                <action android:name="com.celsuis.celsuis.ACTION_UPDATE_WIDGET" />
-                <action android:name="com.celsuis.celsuis.ACTION_PREV" />
-                <action android:name="com.celsuis.celsuis.ACTION_PLAY_PAUSE" />
-                <action android:name="com.celsuis.celsuis.ACTION_NEXT" />
+                <action android:name="com.celsius.celsius.ACTION_UPDATE_WIDGET" />
+                <action android:name="com.celsius.celsius.ACTION_PREV" />
+                <action android:name="com.celsius.celsius.ACTION_PLAY_PAUSE" />
+                <action android:name="com.celsius.celsius.ACTION_NEXT" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

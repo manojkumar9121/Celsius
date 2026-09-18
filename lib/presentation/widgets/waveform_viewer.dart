@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/presentation/providers/settings_provider.dart';
-import 'package:celsuis/presentation/widgets/waveform_painter.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/presentation/providers/settings_provider.dart';
+import 'package:celsius/presentation/widgets/waveform_painter.dart';
 
 class WaveformViewer extends ConsumerStatefulWidget {
   final List<double>? waveData;

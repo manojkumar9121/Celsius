@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/app.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/app.dart';
 
 bool _hiveInitSuccess = false;
 String _hiveErrorText = 'Local storage failed to initialize.';
@@ -69,7 +69,7 @@ class HiveErrorScreen extends StatelessWidget {
                       markHiveInitSuccess();
                       if (context.mounted) {
                         Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(builder: (_) => const CelsuisApp()),
+                          MaterialPageRoute(builder: (_) => const CelsiusApp()),
                           (_) => false,
                         );
                       }

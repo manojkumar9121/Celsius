@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:celsuis/presentation/providers/library_provider.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/presentation/widgets/song_tile.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsius/presentation/providers/library_provider.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/presentation/widgets/song_tile.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
 
 class StatsScreen extends ConsumerWidget {
   const StatsScreen({super.key});

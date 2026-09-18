@@ -1,5 +1,5 @@
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
 
 part 'song_box.g.dart';
 

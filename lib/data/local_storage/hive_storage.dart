@@ -2,13 +2,13 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:celsuis/data/local_storage/song_box.dart';
-import 'package:celsuis/data/local_storage/playlist_box.dart';
-import 'package:celsuis/data/local_storage/settings_box.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/domain/entities/playlist_entity.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/services/waveform_extractor_service.dart';
+import 'package:celsius/data/local_storage/song_box.dart';
+import 'package:celsius/data/local_storage/playlist_box.dart';
+import 'package:celsius/data/local_storage/settings_box.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/domain/entities/playlist_entity.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/services/waveform_extractor_service.dart';
 
 /// Current schema version for JSON payloads. Bump this when the JSON layout
 /// of stored records changes, and add the corresponding migration step in

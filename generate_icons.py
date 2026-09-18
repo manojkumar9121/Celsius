@@ -14,7 +14,7 @@ sizes = [
     (32, 32, 'icon_32.png'),
 ]
 
-icon_dir = '/home/yuki/Documents/Celsuis/celsuis/assets/icons'
+icon_dir = '/home/yuki/Documents/Celsuis/celsius/assets/icons'
 
 for width, height, filename in sizes:
     img = Image.new('RGBA', (width, height), (0, 0, 0, 0))

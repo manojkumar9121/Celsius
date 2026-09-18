@@ -1,20 +1,21 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/presentation/providers/library_provider.dart';
-import 'package:celsuis/presentation/providers/settings_provider.dart';
-import 'package:celsuis/presentation/providers/sleep_timer_provider.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/core/utils/color_utils.dart';
-import 'package:celsuis/presentation/widgets/waveform_viewer.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_widgets.dart';
-import 'package:celsuis/services/waveform_extractor_service.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/presentation/providers/library_provider.dart';
+import 'package:celsius/presentation/providers/settings_provider.dart';
+import 'package:celsius/presentation/providers/sleep_timer_provider.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/core/utils/color_utils.dart';
+import 'package:celsius/presentation/widgets/waveform_viewer.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_widgets.dart';
+import 'package:celsius/services/waveform_extractor_service.dart';
 
 class NowPlayingScreen extends ConsumerStatefulWidget {
   const NowPlayingScreen({super.key});
@@ -100,7 +101,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
                   child: LayoutBuilder(
                     builder: (context, constraints) {
                     final maxH = constraints.maxHeight;
-                    final artSize = (maxH * 0.35).clamp(180.0, 340.0);
+                    final maxW = constraints.maxWidth;
+                    // Dynamic sizing: art scales with viewport height but never
+                    // overflows narrow screens; gaps scale proportionally so
+                    // short and tall phones distribute space evenly.
+                    final artSize = math.min(
+                      (maxH * 0.32).clamp(180.0, 340.0),
+                      math.max(140.0, maxW - 48.0),
+                    );
+                    final gapSmall = (maxH * 0.008).clamp(4.0, 10.0);
+                    final gapMedium = (maxH * 0.018).clamp(8.0, 20.0);
                     return SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(minHeight: maxH),
@@ -108,19 +118,23 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
                           child: Column(
                             children: [
                               _buildTopBar(context, spec),
-                              const SizedBox(height: 8),
+                              SizedBox(height: gapSmall),
                               _buildAlbumArt(song, artSize, playerState),
-                              const SizedBox(height: 20),
+                              SizedBox(height: gapMedium),
                               _buildSongInfo(song, spec, playerState.isPlaying),
-                              const SizedBox(height: 12),
+                              SizedBox(height: gapSmall),
                               _buildActionBar(song, accentColor, spec),
-                              const SizedBox(height: 4),
+                              SizedBox(height: gapSmall),
                               _buildSeekBar(playerState, accentColor, spec),
-                              const SizedBox(height: 4),
+                              SizedBox(height: gapSmall),
                               _buildTransportControls(playerState, accentColor, spec),
-                              const SizedBox(height: 12),
+                              SizedBox(height: gapSmall),
                               _buildWaveform(song, spec),
-                              const SizedBox(height: 8),
+                              SizedBox(height: gapSmall),
+                              // Pins the 3 pills (queue/playlist/lyrics) to the
+                              // bottom on tall screens; collapses to zero when
+                              // content overflows and the view scrolls.
+                              const Spacer(),
                               _buildBottomNavigation(spec),
                             ],
                           ),
@@ -591,7 +605,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
       return _buildLcdBar(spec);
     }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+      // SafeArea already applies the device bottom inset (gesture bar vs
+      // 3-button nav), so keep only a small fixed margin here. A large fixed
+      // value looked fine on gesture-nav phones but left a visible gap on
+      // phones with a taller system nav bar.
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
       child: Row(
         children: [
           Expanded(
@@ -628,7 +646,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
   Widget _buildLcdBar(NowPlayingThemeSpec spec) {
     final color = spec.navTextColor;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
       child: Container(
         decoration: BoxDecoration(
           border: Border(
@@ -662,7 +680,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
         return Icons.repeat_one;
       case AppSettingsRepeatMode.all:
         return Icons.repeat;
-      default:
+      case AppSettingsRepeatMode.off:
+        return Icons.repeat;
+      case null:
         return Icons.repeat;
     }
   }

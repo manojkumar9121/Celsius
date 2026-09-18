@@ -2,13 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/data/local_storage/playlist_box.dart';
-import 'package:celsuis/data/local_storage/settings_box.dart';
-import 'package:celsuis/data/local_storage/song_box.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/domain/entities/playlist_entity.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/data/local_storage/playlist_box.dart';
+import 'package:celsius/data/local_storage/settings_box.dart';
+import 'package:celsius/data/local_storage/song_box.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/domain/entities/playlist_entity.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
 
 /// Guards the storage upgrade path: boxes written by older builds contain
 /// typed binary frames (SongBox/PlaylistBox/SettingsBox). On first launch of
@@ -18,7 +18,7 @@ void main() {
   late Directory tempDir;
 
   setUp(() async {
-    tempDir = await Directory.systemTemp.createTemp('celsuis_migration_test');
+    tempDir = await Directory.systemTemp.createTemp('celsius_migration_test');
     Hive.init(tempDir.path);
   });
 

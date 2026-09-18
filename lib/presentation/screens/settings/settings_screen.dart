@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:celsuis/presentation/providers/settings_provider.dart';
-import 'package:celsuis/presentation/providers/library_provider.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
-import 'package:celsuis/core/utils/color_utils.dart';
-import 'package:celsuis/main.dart' as app;
+import 'package:celsius/presentation/providers/settings_provider.dart';
+import 'package:celsius/presentation/providers/library_provider.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsius/core/utils/color_utils.dart';
+import 'package:celsius/main.dart' as app;
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});

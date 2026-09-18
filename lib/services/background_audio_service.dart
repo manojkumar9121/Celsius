@@ -4,8 +4,8 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:audio_service/audio_service.dart';
 import 'package:just_audio/just_audio.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
 
 enum _CrossfadeState { idle, preloading, fading, transitioning }
 
@@ -23,6 +23,9 @@ class AudioPlayerHandler extends BaseAudioHandler
   ConcatenatingAudioSource? _source;
   Duration _lastPosition = Duration.zero;
   int _queueSetSeq = 0;
+  // Serializes queue reorders so rapid successive drags apply in order
+  // instead of interleaving their audio-source moves.
+  Future<void> _reorderChain = Future.value();
 
   /// Index of the last song whose play count was recorded. Guards against
   /// double counting when the same index is re-emitted (e.g. after a
@@ -184,6 +187,14 @@ class AudioPlayerHandler extends BaseAudioHandler
       (state) {
         try {
           if (state == ProcessingState.completed) {
+            if (_repeatMode == AudioServiceRepeatMode.one ||
+                _repeatMode == AudioServiceRepeatMode.all) {
+              // LoopMode.one / LoopMode.all: let just_audio handle the native
+              // loop internally.  ExoPlayer briefly emits STATE_ENDED before
+              // looping back, which would otherwise trigger _finishQueue()
+              // and break the loop.
+              return;
+            }
             _finishQueue();
           }
         } catch (e) {
@@ -916,14 +927,53 @@ class AudioPlayerHandler extends BaseAudioHandler
     _notifyShuffleMode();
   }
 
-  Future<void> reorderQueue(int oldIndex, int newIndex) async {
+  /// Moves the queue entry at [oldIndex] to [newIndex] (onReorderItem
+  /// semantics: post-removal insertion index, so no extra adjustment).
+  /// Calls are serialized: a second drag while a first is still moving its
+  /// audio source waits for the first to finish, so both apply to the same
+  /// order the UI already shows.
+  Future<void> reorderQueue(int oldIndex, int newIndex) {
+    if (oldIndex < 0 || oldIndex >= _queue.length) return Future.value();
+    if (newIndex < 0 || newIndex >= _queue.length) return Future.value();
+    if (oldIndex == newIndex) return Future.value();
+
+    final run = _reorderChain.then(
+      (_) => _doReorderQueue(oldIndex, newIndex, _queueSetSeq),
+    );
+    // Keep the chain alive for the next reorder even if this one throws.
+    _reorderChain = run.catchError((Object _) {});
+    return run;
+  }
+
+  /// Where the playing entry at [currentIndex] ends up after moving the
+  /// entry at [oldIndex] to [newIndex] (post-removal insertion semantics).
+  /// Pure position arithmetic — unlike an id lookup it stays correct when
+  /// the same song appears multiple times in the queue.
+  @visibleForTesting
+  static int adjustIndexAfterMove(
+    int currentIndex,
+    int oldIndex,
+    int newIndex,
+  ) {
+    if (currentIndex == oldIndex) return newIndex;
+    if (oldIndex < currentIndex && currentIndex <= newIndex) {
+      return currentIndex - 1;
+    }
+    if (newIndex <= currentIndex && currentIndex < oldIndex) {
+      return currentIndex + 1;
+    }
+    return currentIndex;
+  }
+
+  Future<void> _doReorderQueue(int oldIndex, int newIndex, int queueSeq) async {
+    // The queue was replaced (setQueue) while this reorder was queued —
+    // the indices belong to the old order, so there is nothing to do. The
+    // UI resyncs from the handler's authoritative order instead.
+    if (queueSeq != _queueSetSeq) return;
     if (oldIndex < 0 || oldIndex >= _queue.length) return;
     if (newIndex < 0 || newIndex >= _queue.length) return;
 
     final wasPlaying = player.playing;
-    final currentId = _currentIndex >= 0 && _currentIndex < _queue.length
-        ? _queue[_currentIndex].id
-        : null;
     final currentPosition = player.position;
 
     final songs = List<SongEntity>.from(_queue);
@@ -932,19 +982,27 @@ class AudioPlayerHandler extends BaseAudioHandler
     _queue = songs;
     if (!_isShuffled) _orderedQueue = List.of(_queue);
 
-    _currentIndex = currentId == null
-        ? 0
-        : _queue.indexWhere((s) => s.id == currentId);
-    if (_currentIndex < 0) _currentIndex = 0;
+    _currentIndex =
+        adjustIndexAfterMove(_currentIndex, oldIndex, newIndex).clamp(
+      0,
+      _queue.length - 1,
+    );
 
-    await _rebuildSourceKeepingPlayback(wasPlaying, currentPosition);
+    await _rebuildSourceKeepingPlayback(
+      wasPlaying,
+      currentPosition,
+      moveFrom: oldIndex,
+      moveTo: newIndex,
+    );
     queue.add(_queue.map(_songToMediaItem).toList());
   }
 
   Future<void> _rebuildSourceKeepingPlayback(
     bool wasPlaying,
-    Duration position,
-  ) async {
+    Duration position, {
+    int? moveFrom,
+    int? moveTo,
+  }) async {
     if (_source == null || _queue.isEmpty) return;
     if (player.processingState == ProcessingState.idle) return;
 
@@ -953,7 +1011,11 @@ class AudioPlayerHandler extends BaseAudioHandler
     try {
       final src = _source!;
       if (src.children.length == _queue.length) {
-        await _reorderSourceInPlace(_queue);
+        if (moveFrom != null && moveTo != null) {
+          await _moveSourceInPlace(moveFrom, moveTo);
+        } else {
+          await _reorderSourceInPlace(_queue);
+        }
         if (wasPlaying) {
           await player.play();
         }
@@ -976,11 +1038,46 @@ class AudioPlayerHandler extends BaseAudioHandler
     }
   }
 
+  /// Applies a single queue drag to the loaded [ConcatenatingAudioSource]
+  /// without stopping playback. [ConcatenatingAudioSource.move] uses the
+  /// same post-removal insertion semantics as a list removeAt/insert, so the
+  /// same [oldIndex]/[newIndex] apply directly — no id diffing, which also
+  /// keeps this correct when the same song appears multiple times in the
+  /// queue. While the move runs, mediaItem emissions are suppressed so the
+  /// intermediate currentIndex event cannot flicker the Now Playing UI.
+  /// Throws on any index mismatch so the caller falls back to a full reload.
+  Future<void> _moveSourceInPlace(int oldIndex, int newIndex) async {
+    final src = _source;
+    if (src == null) return;
+    if (oldIndex < 0 ||
+        oldIndex >= src.children.length ||
+        newIndex < 0 ||
+        newIndex >= src.children.length) {
+      throw StateError(
+        'reorder move ($oldIndex -> $newIndex) out of range '
+        'for source of length ${src.children.length}',
+      );
+    }
+
+    _suppressCurrentSongEvents = true;
+    try {
+      await src.move(oldIndex, newIndex);
+    } finally {
+      _suppressCurrentSongEvents = false;
+      // The final index event may have been suppressed mid-move — emit
+      // the settled current song so the UI always ends on the correct one.
+      _emitCurrentSong();
+    }
+  }
+
   /// Reorders the loaded [ConcatenatingAudioSource] to match [newOrder]
   /// without stopping playback. Moves are applied from the end backwards so
   /// an earlier move never disturbs items that have already been placed.
   /// While the moves run, mediaItem emissions are suppressed so the
   /// intermediate currentIndex events cannot flicker the Now Playing UI.
+  /// Note: matches children by song id, so it must only be used for orders
+  /// where every id is unique (e.g. shuffle) — single queue drags use
+  /// [_moveSourceInPlace] instead.
   Future<void> _reorderSourceInPlace(List<SongEntity> newOrder) async {
     final src = _source;
     if (src == null) return;

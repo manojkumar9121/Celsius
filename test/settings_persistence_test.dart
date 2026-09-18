@@ -4,16 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive/hive.dart';
-import 'package:celsuis/core/utils/color_utils.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/presentation/providers/settings_provider.dart';
+import 'package:celsius/core/utils/color_utils.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/presentation/providers/settings_provider.dart';
 
 void main() {
   late Directory tempDir;
 
   setUpAll(() async {
-    tempDir = await Directory.systemTemp.createTemp('celsuis_settings_test');
+    tempDir = await Directory.systemTemp.createTemp('celsius_settings_test');
     Hive.init(tempDir.path);
     await HiveStorage.init();
   });

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/core/utils/color_utils.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/core/utils/color_utils.dart';
 
 final settingsProvider = StateNotifierProvider<SettingsNotifier, AppSettings>((ref) {
   return SettingsNotifier();

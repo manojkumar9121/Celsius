@@ -4,10 +4,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/core/widgets/cached_song_image.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsius/core/widgets/cached_song_image.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_spec.dart';
 
 // ===========================================================================
 // Background

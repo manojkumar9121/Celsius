@@ -2,8 +2,8 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/domain/entities/app_settings.dart';
-import 'package:celsuis/presentation/providers/settings_provider.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
+import 'package:celsius/presentation/providers/settings_provider.dart';
 
 /// Decorative background treatment used by a Now Playing theme.
 enum BackgroundLayer {

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/domain/entities/playlist_entity.dart';
-import 'package:celsuis/data/local_storage/hive_storage.dart';
-import 'package:celsuis/data/local_storage/playlist_box.dart';
+import 'package:celsius/domain/entities/playlist_entity.dart';
+import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/data/local_storage/playlist_box.dart';
 import 'package:uuid/uuid.dart';
 
 final playlistProvider = StateNotifierProvider<PlaylistNotifier, PlaylistState>((ref) {

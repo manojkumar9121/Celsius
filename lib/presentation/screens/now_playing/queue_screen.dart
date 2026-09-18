@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_spec.dart';
-import 'package:celsuis/presentation/themes/now_playing_theme_widgets.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_spec.dart';
+import 'package:celsius/presentation/themes/now_playing_theme_widgets.dart';
 
 class QueueScreen extends ConsumerWidget {
   const QueueScreen({super.key});
@@ -54,8 +54,14 @@ class _QueueList extends ConsumerWidget {
       itemBuilder: (context, index) {
         final song = queue[index];
         final isCurrent = song.id == currentSong?.id;
+        // Object identity, not song id: the same song can appear multiple
+        // times in the queue, and ReorderableListView requires every item
+        // key to be unique or drags track the wrong row. Queue entries keep
+        // stable object references across reorders/resyncs (removeAt/insert
+        // and List.of are reference-preserving), so identity keys stay
+        // stable for the lifetime of the queue.
         return ListTile(
-          key: ValueKey(song.id),
+          key: ObjectKey(song),
           dense: true,
           leading: Row(
             mainAxisSize: MainAxisSize.min,

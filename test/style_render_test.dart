@@ -2,7 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:celsuis/presentation/widgets/waveform_painter.dart';
+import 'package:celsius/presentation/widgets/waveform_painter.dart';
 
 void main() {
   testWidgets('renders all waveform styles without errors', (WidgetTester tester) async {

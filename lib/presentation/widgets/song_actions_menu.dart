@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:celsuis/presentation/providers/library_provider.dart';
-import 'package:celsuis/presentation/providers/playlist_provider.dart';
-import 'package:celsuis/presentation/providers/audio_player_provider.dart';
-import 'package:celsuis/domain/entities/song_entity.dart';
-import 'package:celsuis/domain/entities/playlist_entity.dart';
+import 'package:celsius/presentation/providers/library_provider.dart';
+import 'package:celsius/presentation/providers/playlist_provider.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/domain/entities/playlist_entity.dart';
 
 /// Trailing "⋮" (3-dot) menu for a song tile.
 ///
