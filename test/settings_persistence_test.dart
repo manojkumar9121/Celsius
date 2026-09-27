@@ -18,74 +18,99 @@ void main() {
     await HiveStorage.init();
   });
 
+  tearDown(() async {
+    HiveStorage.resetSettingsCache();
+    await HiveStorage.saveSettings(const AppSettings());
+  });
+
   tearDownAll(() async {
     await Hive.close();
     await tempDir.delete(recursive: true);
   });
 
+  Future<void> restartHive() async {
+    await Hive.close();
+    HiveStorage.resetSettingsCache();
+    await HiveStorage.init();
+  }
+
   group('settings persistence', () {
-    test('now playing theme survives a "restart" (re-read from storage)', () {
+    test('now playing theme survives a real Hive close and reopen', () async {
       final notifier = SettingsNotifier();
-      notifier.setNowPlayingTheme(NowPlayingTheme.pocketLcd);
-      final reloaded = SettingsNotifier().state;
-      expect(reloaded.nowPlayingTheme, NowPlayingTheme.pocketLcd);
+      await notifier.setNowPlayingTheme(NowPlayingTheme.pocketLcd);
+      notifier.dispose();
+      await restartHive();
+
+      final reloaded = SettingsNotifier();
+      addTearDown(reloaded.dispose);
+      expect(reloaded.state.nowPlayingTheme, NowPlayingTheme.pocketLcd);
     });
 
-    test('custom color survives a "restart" (re-read from storage)', () {
+    test('custom color survives a real Hive close and reopen', () async {
       final notifier = SettingsNotifier();
-      notifier.setThemePreset(ThemePreset.nord);
+      await notifier.setThemePreset(ThemePreset.nord);
+      notifier.dispose();
+      await restartHive();
 
-      final restored = HiveStorage.getSettings();
-      expect(restored.themePreset, ThemePreset.nord);
+      final restored = SettingsNotifier();
+      addTearDown(restored.dispose);
+      expect(restored.state.themePreset, ThemePreset.nord);
     });
 
-    test('primary color + custom preset survive a restart', () {
+    test('primary color + custom preset survive a real Hive restart', () async {
       final notifier = SettingsNotifier();
-      notifier.setPrimaryColor(const Color(0xFF1976D2));
+      await notifier.setPrimaryColor(const Color(0xFF1976D2));
+      notifier.dispose();
+      await restartHive();
 
-      final restored = HiveStorage.getSettings();
-      expect(restored.themePreset, ThemePreset.custom);
-      expect(restored.primaryColor, '#1976d2');
+      final restored = SettingsNotifier();
+      addTearDown(restored.dispose);
+      expect(restored.state.themePreset, ThemePreset.custom);
+      expect(restored.state.primaryColor, '#1976d2');
     });
 
-    test('custom preset maps to dark mode so the chosen color is always visible',
-        () {
-      final container = ProviderContainer(overrides: [
-        settingsProvider.overrideWith(
-          (ref) => SettingsNotifier()
-            ..setPrimaryColor(const Color(0xFF1976D2)),
-        ),
-      ]);
-      addTearDown(container.dispose);
-      expect(container.read(themeModeProvider), ThemeMode.dark);
-    });
+    test(
+      'custom preset maps to dark mode so the chosen color is always visible',
+      () async {
+        final notifier = SettingsNotifier();
+        await notifier.setPrimaryColor(const Color(0xFF1976D2));
+        final container = ProviderContainer(
+          overrides: [settingsProvider.overrideWith((ref) => notifier)],
+        );
+        addTearDown(container.dispose);
+        expect(container.read(themeModeProvider), ThemeMode.dark);
+      },
+    );
 
-    test('matching presets auto-switch the Now Playing skin', () {
+    test('matching presets auto-switch the Now Playing skin', () async {
       final notifier = SettingsNotifier();
-      notifier.setThemePreset(ThemePreset.risoZine);
+      await notifier.setThemePreset(ThemePreset.risoZine);
       expect(notifier.state.nowPlayingTheme, NowPlayingTheme.risoZine);
 
-      notifier.setThemePreset(ThemePreset.paperPress);
+      await notifier.setThemePreset(ThemePreset.paperPress);
       expect(notifier.state.nowPlayingTheme, NowPlayingTheme.paperPress);
 
-      notifier.setThemePreset(ThemePreset.pocketLcd);
+      await notifier.setThemePreset(ThemePreset.pocketLcd);
       expect(notifier.state.nowPlayingTheme, NowPlayingTheme.pocketLcd);
 
       // Non-matching presets leave the skin untouched.
-      notifier.setNowPlayingTheme(NowPlayingTheme.classic);
-      notifier.setThemePreset(ThemePreset.nord);
+      await notifier.setNowPlayingTheme(NowPlayingTheme.classic);
+      await notifier.setThemePreset(ThemePreset.nord);
       expect(notifier.state.nowPlayingTheme, NowPlayingTheme.classic);
     });
 
-    test('matching presets map to light mode (cream/olive backgrounds)', () {
-      final container = ProviderContainer(overrides: [
-        settingsProvider.overrideWith(
-          (ref) => SettingsNotifier()..setThemePreset(ThemePreset.paperPress),
-        ),
-      ]);
-      addTearDown(container.dispose);
-      expect(container.read(themeModeProvider), ThemeMode.light);
-    });
+    test(
+      'matching presets map to light mode (cream/olive backgrounds)',
+      () async {
+        final notifier = SettingsNotifier();
+        await notifier.setThemePreset(ThemePreset.paperPress);
+        final container = ProviderContainer(
+          overrides: [settingsProvider.overrideWith((ref) => notifier)],
+        );
+        addTearDown(container.dispose);
+        expect(container.read(themeModeProvider), ThemeMode.light);
+      },
+    );
   });
 
   group('dominantColorFromRgba', () {
@@ -102,29 +127,29 @@ void main() {
       return data;
     }
 
-    test('white artwork falls back to theme color', () {
+    test('white artwork falls back to theme color', () async {
       final result = dominantColorFromRgba(solid(255, 255, 255), fallback);
       expect(result, fallback);
     });
 
-    test('black artwork falls back to theme color', () {
+    test('black artwork falls back to theme color', () async {
       final result = dominantColorFromRgba(solid(0, 0, 0), fallback);
       expect(result, fallback);
     });
 
-    test('gray artwork falls back to theme color', () {
+    test('gray artwork falls back to theme color', () async {
       final result = dominantColorFromRgba(solid(128, 128, 128), fallback);
       expect(result, fallback);
     });
 
-    test('solid red artwork yields a saturated red accent', () {
+    test('solid red artwork yields a saturated red accent', () async {
       final result = dominantColorFromRgba(solid(220, 30, 30), fallback);
       final hsl = HSLColor.fromColor(result);
       expect(hsl.hue, closeTo(0, 25));
       expect(hsl.saturation, greaterThan(0.5));
     });
 
-    test('vibrant pixels preferred over a muddy average', () {
+    test('vibrant pixels preferred over a muddy average', () async {
       // Mostly gray, with a saturated red pocket large enough to drive the
       // overall saturation above the colorless threshold.
       final data = solid(128, 128, 128);

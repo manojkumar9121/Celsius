@@ -112,10 +112,10 @@ class StatsScreen extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
-                _statColumn(Icons.music_note, '$songs', 'Songs'),
-                _statColumn(Icons.favorite, '$favorites', 'Favorites'),
-                _statColumn(Icons.person, '$artists', 'Artists'),
-                _statColumn(Icons.album, '$albums', 'Albums'),
+                _statColumn(context, Icons.music_note, '$songs', 'Songs'),
+                _statColumn(context, Icons.favorite, '$favorites', 'Favorites'),
+                _statColumn(context, Icons.person, '$artists', 'Artists'),
+                _statColumn(context, Icons.album, '$albums', 'Albums'),
               ],
             ),
             const SizedBox(height: 16),
@@ -148,13 +148,13 @@ class StatsScreen extends ConsumerWidget {
     );
   }
 
-  Widget _statColumn(IconData icon, String value, String label) {
+  Widget _statColumn(BuildContext context, IconData icon, String value, String label) {
     return Column(
       children: [
-        Icon(icon, size: 28, color: Colors.green),
+        Icon(icon, size: 28, color: Theme.of(context).colorScheme.primary),
         const SizedBox(height: 4),
-        Text(value, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+        Text(value, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        Text(label, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5))),
       ],
     );
   }
@@ -171,7 +171,7 @@ class StatsScreen extends ConsumerWidget {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: rank <= 3 ? Colors.green : Colors.grey[500],
+              color: rank <= 3 ? Theme.of(context).colorScheme.primary : Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4),
             ),
           ),
         ),
@@ -200,7 +200,7 @@ class StatsScreen extends ConsumerWidget {
   Widget _sectionTitle(String title) {
     return Text(
       title,
-      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
     );
   }
 

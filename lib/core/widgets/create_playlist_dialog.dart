@@ -43,14 +43,26 @@ class CreatePlaylistDialog extends StatelessWidget {
   }
 }
 
-Future<String?> showCreatePlaylistDialog(BuildContext context, WidgetRef ref) async {
+Future<String?> showCreatePlaylistDialog(
+  BuildContext context,
+  WidgetRef ref,
+) async {
   final name = await showDialog<String>(
     context: context,
     builder: (ctx) => const CreatePlaylistDialog(),
   );
   if (name != null && name.trim().isNotEmpty) {
-    ref.read(playlistProvider.notifier).createPlaylist(name.trim());
-    return name;
+    try {
+      await ref.read(playlistProvider.notifier).createPlaylist(name.trim());
+      return name;
+    } catch (error) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not create playlist: $error')),
+        );
+      }
+      return null;
+    }
   }
   return null;
 }

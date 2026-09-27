@@ -19,54 +19,75 @@ Color parseHexColor(String hex) {
 /// Derives a single "themeable" color from raw RGBA pixels (e.g. a downscaled
 /// album art decode).
 ///
-/// Plain black, white or grayscale covers carry no meaningful hue - they fall
-/// back to [fallback] (the app's primary color) instead of producing a muddy or
-/// invisible accent that breaks the now-playing screen. When the artwork has
-/// color, the most vibrant pixels are preferred (Palette API style) over a
-/// plain average, and the result is normalized into a readable mid-tone.
+/// Uses color quantization: similar colors are grouped into bins, the most
+/// frequent non-neutral bin is selected, and the result is normalized into a
+/// readable mid-tone suitable for waveform / accent use.
+///
+/// Plain black, white or grayscale covers carry no meaningful hue and fall
+/// back to [fallback] (the app's primary color).
 Color dominantColorFromRgba(Uint8List rgba, Color fallback) {
-  int r = 0, g = 0, b = 0, count = 0;
-  int vr = 0, vg = 0, vb = 0, vCount = 0;
-  double satSum = 0;
+  const int binShift = 3; // 8 levels per channel → 512 bins
+
+  // binKey → [sumR, sumG, sumB, count]
+  final Map<int, List<int>> bins = {};
+  int totalPixels = 0;
 
   for (int i = 0; i + 3 < rgba.length; i += 4) {
     if (rgba[i + 3] < 40) continue;
     final cr = rgba[i], cg = rgba[i + 1], cb = rgba[i + 2];
-    final hsl = HSLColor.fromColor(Color.fromARGB(255, cr, cg, cb));
-    r += cr;
-    g += cg;
-    b += cb;
-    count++;
-    satSum += hsl.saturation;
-    if (hsl.saturation > 0.28 && hsl.lightness > 0.15 && hsl.lightness < 0.88) {
-      vr += cr;
-      vg += cg;
-      vb += cb;
-      vCount++;
+
+    // Skip near-black and near-white pixels — they're usually background
+    // or paper and rarely the intended accent color.
+    final maxc = cr > cg ? (cr > cb ? cr : cb) : (cg > cb ? cg : cb);
+    final minc = cr < cg ? (cr < cb ? cr : cb) : (cg < cb ? cg : cb);
+    if (maxc < 30 || minc > 225) continue;
+
+    final key = ((cr >> binShift) << 16) | ((cg >> binShift) << 8) | (cb >> binShift);
+    final bin = bins[key];
+    if (bin != null) {
+      bin[0] += cr;
+      bin[1] += cg;
+      bin[2] += cb;
+      bin[3]++;
+    } else {
+      bins[key] = [cr, cg, cb, 1];
+    }
+    totalPixels++;
+  }
+
+  if (totalPixels == 0 || bins.isEmpty) return fallback;
+
+  // Find the bin with the most pixels (the dominant color cluster).
+  List<int>? bestBin;
+  int bestCount = 0;
+  for (final bin in bins.values) {
+    if (bin[3] > bestCount) {
+      bestCount = bin[3];
+      bestBin = bin;
     }
   }
-  if (count == 0) return fallback;
+  if (bestBin == null || bestCount < totalPixels ~/ 32) return fallback;
 
-  final avg = Color.fromARGB(255, r ~/ count, g ~/ count, b ~/ count);
-  final avgSat = satSum / count;
-  final avgLight = HSLColor.fromColor(avg).lightness;
-  if (avgSat < 0.12 || avgLight < 0.10 || avgLight > 0.92) {
-    return fallback;
+  // Collect all bins sorted by count descending so we can fall back to the
+  // next-most-populous non-neutral bin when the dominant one is gray.
+  final sortedBins = bins.values.toList()..sort((a, b) => b[3].compareTo(a[3]));
+
+  for (final bin in sortedBins) {
+    final avgR = bin[0] ~/ bin[3];
+    final avgG = bin[1] ~/ bin[3];
+    final avgB = bin[2] ~/ bin[3];
+    final base = HSLColor.fromColor(Color.fromARGB(255, avgR, avgG, avgB));
+
+    if (base.saturation >= 0.08) {
+      // Normalize into a readable mid-tone for waveform / accent use.
+      return HSLColor.fromAHSL(
+        1,
+        base.hue,
+        base.saturation.clamp(0.30, 1.0),
+        base.lightness.clamp(0.35, 0.65),
+      ).toColor();
+    }
   }
 
-  // Prefer the most vibrant pixels when enough exist.
-  final useVibrant = vCount > count ~/ 8;
-  final base = HSLColor.fromColor(Color.fromARGB(
-    255,
-    useVibrant ? vr ~/ vCount : r ~/ count,
-    useVibrant ? vg ~/ vCount : g ~/ count,
-    useVibrant ? vb ~/ vCount : b ~/ count,
-  ));
-
-  return HSLColor.fromAHSL(
-    1,
-    base.hue,
-    (base.saturation * 1.15).clamp(0.35, 1.0),
-    base.lightness.clamp(0.35, 0.65),
-  ).toColor();
+  return fallback;
 }

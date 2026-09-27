@@ -7,7 +7,6 @@ import 'package:celsius/presentation/providers/library_provider.dart';
 import 'package:celsius/domain/entities/app_settings.dart';
 import 'package:celsius/presentation/themes/now_playing_theme_spec.dart';
 import 'package:celsius/core/utils/color_utils.dart';
-import 'package:celsius/main.dart' as app;
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -17,237 +16,273 @@ class SettingsScreen extends ConsumerWidget {
     final settings = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
 
-    ref.listen<AppSettings>(settingsProvider, (prev, next) {
-      if (prev?.crossfadeEnabled != next.crossfadeEnabled ||
-          prev?.crossfadeDurationMs != next.crossfadeDurationMs) {
-        app.audioHandler?.updateCrossfadeSettings();
-      }
-    });
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
-          _buildSection(
-            context,
-            'Appearance',
-            [
-              ListTile(
-                leading: const Icon(Icons.palette),
-                title: const Text('Theme Preset'),
-                trailing: DropdownButton<ThemePreset>(
-                  value: settings.themePreset,
-                  items: ThemePreset.values.map((preset) => DropdownMenuItem(
-                    value: preset,
-                    child: Text(_themeLabel(preset)),
-                  )).toList(),
-                  onChanged: (value) {
-                    if (value != null) {
-                      notifier.setThemePreset(value);
-                    }
-                  },
-                ),
-              ),
-              if (settings.themePreset == ThemePreset.custom) ...[
-                ListTile(
-                  leading: const Icon(Icons.color_lens),
-                  title: const Text('Primary Color'),
-                  subtitle: Text(settings.primaryColor ?? '#6750A4'),
-                  onTap: () async {
-                    final color = await showDialog<Color>(
-                      context: context,
-                      builder: (ctx) => ColorPickerDialog(initialColor: settings.primaryColor),
+          _buildSection(context, 'Appearance', [
+            ListTile(
+              leading: const Icon(Icons.palette),
+              title: const Text('Theme Preset'),
+              trailing: DropdownButton<ThemePreset>(
+                value: settings.themePreset,
+                items: ThemePreset.values
+                    .map(
+                      (preset) => DropdownMenuItem(
+                        value: preset,
+                        child: Text(_themeLabel(preset)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null) {
+                    _persistSetting(
+                      context,
+                      () => notifier.setThemePreset(value),
                     );
-                    if (color != null && context.mounted) {
-                      notifier.setPrimaryColor(color);
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.dark_mode),
-                  title: const Text('Accent Color'),
-                  subtitle: Text(settings.accentColor ?? '#03DAC6'),
-                  onTap: () async {
-                    final color = await showDialog<Color>(
-                      context: context,
-                      builder: (ctx) => ColorPickerDialog(initialColor: settings.accentColor),
-                    );
-                    if (color != null && context.mounted) {
-                      notifier.setAccentColor(color);
-                    }
-                  },
-                ),
-              ],
-              ListTile(
-                leading: const Icon(Icons.music_note),
-                title: const Text('Now Playing Theme'),
-                trailing: Text(settings.nowPlayingTheme.name),
-                onTap: () async {
-                  final selected = await showDialog<NowPlayingTheme>(
-                    context: context,
-                    builder: (ctx) =>
-                        NowPlayingThemePicker(initial: settings.nowPlayingTheme),
-                  );
-                  if (selected != null && context.mounted) {
-                    notifier.setNowPlayingTheme(selected);
                   }
                 },
               ),
-            ],
-          ),
-          _buildSection(
-            context,
-            'Visualization',
-            [
-              ListTile(
-                leading: const Icon(Icons.bar_chart),
-                title: const Text('Waveform Style'),
-                trailing: Text(settings.waveformStyle.name),
-                onTap: () async {
-                  final selected = await showDialog<WaveformStyle>(
-                    context: context,
-                    builder: (ctx) => WaveformStylePicker(initialStyle: settings.waveformStyle),
-                  );
-                  if (selected != null && context.mounted) {
-                    notifier.setWaveformStyle(selected);
-                  }
-                },
-              ),
+            ),
+            if (settings.themePreset == ThemePreset.custom) ...[
               ListTile(
                 leading: const Icon(Icons.color_lens),
-                title: const Text('Waveform Color'),
-                subtitle: Text(settings.waveformColor),
+                title: const Text('Primary Color'),
+                subtitle: Text(settings.primaryColor ?? '#6750A4'),
                 onTap: () async {
                   final color = await showDialog<Color>(
                     context: context,
-                    builder: (ctx) => ColorPickerDialog(initialColor: settings.waveformColor),
+                    builder: (ctx) =>
+                        ColorPickerDialog(initialColor: settings.primaryColor),
                   );
                   if (color != null && context.mounted) {
-                    notifier.setWaveformColor(color);
+                    await _persistSetting(
+                      context,
+                      () => notifier.setPrimaryColor(color),
+                    );
                   }
                 },
               ),
               ListTile(
-                leading: const Icon(Icons.speed),
-                title: const Text('Animation Speed'),
-                trailing: Text('${settings.waveformAnimationSpeed}x'),
+                leading: const Icon(Icons.dark_mode),
+                title: const Text('Accent Color'),
+                subtitle: Text(settings.accentColor ?? '#03DAC6'),
                 onTap: () async {
-                  final speed = await showDialog<double>(
+                  final color = await showDialog<Color>(
                     context: context,
-                    builder: (ctx) => SpeedPickerDialog(initialSpeed: settings.waveformAnimationSpeed),
+                    builder: (ctx) =>
+                        ColorPickerDialog(initialColor: settings.accentColor),
                   );
-                  if (speed != null && context.mounted) {
-                    notifier.setWaveformAnimationSpeed(speed);
+                  if (color != null && context.mounted) {
+                    await _persistSetting(
+                      context,
+                      () => notifier.setAccentColor(color),
+                    );
                   }
                 },
               ),
             ],
-          ),
-          _buildSection(
-            context,
-            'Library',
-            [
-              ListTile(
-                leading: const Icon(Icons.folder_open),
-                title: const Text('Add Folder'),
-                subtitle: const Text('Pick a folder to scan for music'),
-                onTap: () async {
-                  final path = await FilePicker.platform.getDirectoryPath();
-                  if (path != null) {
-                    ref.read(libraryProvider.notifier).scanFolder(path);
-                  }
-                },
-              ),
-              SwitchListTile(
-                title: const Text('Auto-scan on Launch'),
-                value: settings.autoScanEnabled,
-                onChanged: (value) => notifier.toggleAutoScan(value),
-              ),
-            ],
-          ),
-          _buildSection(
-            context,
-            'Playback',
-            [
-              SwitchListTile(
-                title: const Text('Autoplay'),
-                subtitle: const Text('Continue playing after the playlist ends'),
-                value: settings.autoplayEnabled,
-                onChanged: (value) => notifier.toggleAutoplay(value),
-              ),
-              SwitchListTile(
-                title: const Text('Crossfade'),
-                subtitle: Text(
-                  settings.crossfadeEnabled
-                      ? 'Fade between songs (${settings.crossfadeDurationMs}ms)'
-                      : 'Off',
-                ),
-                value: settings.crossfadeEnabled,
-                onChanged: (value) => notifier.toggleCrossfade(value),
-              ),
-              if (settings.crossfadeEnabled)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.timer, size: 20),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Slider(
-                          value: settings.crossfadeDurationMs.toDouble(),
-                          onChanged: (value) =>
-                              notifier.setCrossfadeDuration(value.round()),
-                          min: 100,
-                          max: 10000,
-                          divisions: 99,
-                          label: '${settings.crossfadeDurationMs}ms',
-                        ),
-                      ),
-                      SizedBox(
-                        width: 60,
-                        child: Text(
-                          '${settings.crossfadeDurationMs}ms',
-                          style: Theme.of(context).textTheme.bodySmall,
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
-                    ],
+            ListTile(
+              leading: const Icon(Icons.music_note),
+              title: const Text('Now Playing Theme'),
+              trailing: Text(settings.nowPlayingTheme.name),
+              onTap: () async {
+                final selected = await showDialog<NowPlayingTheme>(
+                  context: context,
+                  builder: (ctx) =>
+                      NowPlayingThemePicker(initial: settings.nowPlayingTheme),
+                );
+                if (selected != null && context.mounted) {
+                  await _persistSetting(
+                    context,
+                    () => notifier.setNowPlayingTheme(selected),
+                  );
+                }
+              },
+            ),
+          ]),
+          _buildSection(context, 'Visualization', [
+            ListTile(
+              leading: const Icon(Icons.bar_chart),
+              title: const Text('Waveform Style'),
+              trailing: Text(settings.waveformStyle.name),
+              onTap: () async {
+                final selected = await showDialog<WaveformStyle>(
+                  context: context,
+                  builder: (ctx) =>
+                      WaveformStylePicker(initialStyle: settings.waveformStyle),
+                );
+                if (selected != null && context.mounted) {
+                  await _persistSetting(
+                    context,
+                    () => notifier.setWaveformStyle(selected),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.color_lens),
+              title: const Text('Waveform Color'),
+              subtitle: Text(settings.waveformColor),
+              onTap: () async {
+                final color = await showDialog<Color>(
+                  context: context,
+                  builder: (ctx) =>
+                      ColorPickerDialog(initialColor: settings.waveformColor),
+                );
+                if (color != null && context.mounted) {
+                  await _persistSetting(
+                    context,
+                    () => notifier.setWaveformColor(color),
+                  );
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.speed),
+              title: const Text('Animation Speed'),
+              trailing: Text('${settings.waveformAnimationSpeed}x'),
+              onTap: () async {
+                final speed = await showDialog<double>(
+                  context: context,
+                  builder: (ctx) => SpeedPickerDialog(
+                    initialSpeed: settings.waveformAnimationSpeed,
                   ),
+                );
+                if (speed != null && context.mounted) {
+                  await _persistSetting(
+                    context,
+                    () => notifier.setWaveformAnimationSpeed(speed),
+                  );
+                }
+              },
+            ),
+          ]),
+          _buildSection(context, 'Library', [
+            ListTile(
+              leading: const Icon(Icons.folder_open),
+              title: const Text('Add Folder'),
+              subtitle: const Text('Pick a folder to scan for music'),
+              onTap: () async {
+                final path = await FilePicker.platform.getDirectoryPath();
+                if (path != null) {
+                  ref.read(libraryProvider.notifier).scanFolder(path);
+                }
+              },
+            ),
+            SwitchListTile(
+              title: const Text('Auto-scan on Launch'),
+              value: settings.autoScanEnabled,
+              onChanged: (value) => _persistSetting(
+                context,
+                () => notifier.toggleAutoScan(value),
+              ),
+            ),
+          ]),
+          _buildSection(context, 'Playback', [
+            SwitchListTile(
+              title: const Text('Autoplay'),
+              subtitle: const Text('Continue playing after the playlist ends'),
+              value: settings.autoplayEnabled,
+              onChanged: (value) => _persistSetting(
+                context,
+                () => notifier.toggleAutoplay(value),
+              ),
+            ),
+            SwitchListTile(
+              title: const Text('Crossfade'),
+              subtitle: Text(
+                settings.crossfadeEnabled
+                    ? 'Fade between songs (${settings.crossfadeDurationMs}ms)'
+                    : 'Off',
+              ),
+              value: settings.crossfadeEnabled,
+              onChanged: (value) => _persistSetting(
+                context,
+                () => notifier.toggleCrossfade(value),
+              ),
+            ),
+            if (settings.crossfadeEnabled)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const Icon(Icons.timer, size: 20),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Slider(
+                        value: settings.crossfadeDurationMs.toDouble(),
+                        onChanged: (value) => _persistSetting(
+                          context,
+                          () => notifier.setCrossfadeDuration(value.round()),
+                        ),
+
+                        min: 100,
+                        max: 10000,
+                        divisions: 99,
+                        label: '${settings.crossfadeDurationMs}ms',
+                      ),
+                    ),
+                    SizedBox(
+                      width: 60,
+                      child: Text(
+                        '${settings.crossfadeDurationMs}ms',
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ],
                 ),
-              SwitchListTile(
-                title: const Text('Dismiss on Pause'),
-                subtitle: const Text('Remove notification when paused'),
-                value: settings.stopOnPause,
-                onChanged: (value) => notifier.toggleStopOnPause(value),
               ),
-            ],
-          ),
-          _buildSection(
-            context,
-            'About',
-            [
-              ListTile(
-                leading: const Icon(Icons.info_outline),
-                title: const Text('Celsuis'),
-                subtitle: const Text('Offline Music Player'),
+            SwitchListTile(
+              title: const Text('Dismiss on Pause'),
+              subtitle: const Text('Remove notification when paused'),
+              value: settings.stopOnPause,
+              onChanged: (value) => _persistSetting(
+                context,
+                () => notifier.toggleStopOnPause(value),
               ),
-              ListTile(
-                leading: const Icon(Icons.folder_outlined),
-                title: const Text('Managed Folders'),
-                subtitle: Text('${settings.managedFolders.length} folder(s)'),
-                onTap: () => _showManagedFolders(context, ref, settings.managedFolders),
-              ),
-              const _VersionTile(),
-            ],
-          ),
+            ),
+          ]),
+          _buildSection(context, 'About', [
+            ListTile(
+              leading: const Icon(Icons.info_outline),
+              title: const Text('Celsuis'),
+              subtitle: const Text('Offline Music Player'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.folder_outlined),
+              title: const Text('Managed Folders'),
+              subtitle: Text('${settings.managedFolders.length} folder(s)'),
+              onTap: () =>
+                  _showManagedFolders(context, ref, settings.managedFolders),
+            ),
+            const _VersionTile(),
+          ]),
         ],
       ),
     );
   }
 
-  Widget _buildSection(BuildContext context, String title, List<Widget> children) {
+  Future<void> _persistSetting(
+    BuildContext context,
+    Future<void> Function() save,
+  ) async {
+    try {
+      await save();
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save setting: $error')));
+    }
+  }
+
+  Widget _buildSection(
+    BuildContext context,
+    String title,
+    List<Widget> children,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -297,7 +332,11 @@ class SettingsScreen extends ConsumerWidget {
     }
   }
 
-  void _showManagedFolders(BuildContext context, WidgetRef ref, List<String> folders) {
+  void _showManagedFolders(
+    BuildContext context,
+    WidgetRef ref,
+    List<String> folders,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -305,7 +344,9 @@ class SettingsScreen extends ConsumerWidget {
         content: SizedBox(
           width: double.maxFinite,
           child: folders.isEmpty
-              ? const Text('No folders managed yet. Add a folder from the Library tab.')
+              ? const Text(
+                  'No folders managed yet. Add a folder from the Library tab.',
+                )
               : ListView.builder(
                   shrinkWrap: true,
                   itemCount: folders.length,
@@ -314,13 +355,37 @@ class SettingsScreen extends ConsumerWidget {
                     final name = folder.split('/').last;
                     return ListTile(
                       leading: const Icon(Icons.folder),
-                      title: Text(name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(folder, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      title: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        folder,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
                         onPressed: () async {
-                          await ref.read(settingsProvider.notifier).removeManagedFolder(folder);
-                          if (ctx.mounted) Navigator.pop(ctx);
+                          try {
+                            await ref
+                                .read(settingsProvider.notifier)
+                                .removeManagedFolder(folder);
+                            if (ctx.mounted) Navigator.pop(ctx);
+                          } catch (error) {
+                            if (!ctx.mounted) return;
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Could not remove managed folder: $error',
+                                ),
+                              ),
+                            );
+                          }
                         },
                       ),
                     );
@@ -353,7 +418,7 @@ class _ColorPickerDialogState extends ConsumerState<ColorPickerDialog> {
   @override
   void initState() {
     super.initState();
-    _selectedColor = parseHexColor(widget.initialColor ?? '#6750A4');
+    _selectedColor = parseHexColor(widget.initialColor ?? '#4ade80');
   }
 
   static String _toHex(Color color) =>
@@ -393,32 +458,42 @@ class _ColorPickerDialogState extends ConsumerState<ColorPickerDialog> {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: [
-              {'color': '#6750A4', 'label': 'Default'},
-              {'color': '#D32F2F', 'label': 'Red'},
-              {'color': '#1976D2', 'label': 'Blue'},
-              {'color': '#388E3C', 'label': 'Green'},
-              {'color': '#F57C00', 'label': 'Orange'},
-              {'color': '#7B1FA2', 'label': 'Purple'},
-              {'color': '#0097A7', 'label': 'Cyan'},
-              {'color': '#FF6090', 'label': 'Pink'},
-            ]
-                .map((map) => ChoiceChip(
-                      label: Text(map['label']!),
-                      selected: _toHex(_selectedColor).toUpperCase() ==
-                          map['color']!.toUpperCase(),
-                      onSelected: (selected) {
-                        if (selected) {
-                          setState(() => _selectedColor = parseHexColor(map['color']!));
-                        }
-                      },
-                    ))
-                .toList(),
+            children:
+                [
+                      {'color': '#4ade80', 'label': 'Default'},
+                      {'color': '#D32F2F', 'label': 'Red'},
+                      {'color': '#1976D2', 'label': 'Blue'},
+                      {'color': '#388E3C', 'label': 'Green'},
+                      {'color': '#F57C00', 'label': 'Orange'},
+                      {'color': '#7B1FA2', 'label': 'Purple'},
+                      {'color': '#0097A7', 'label': 'Cyan'},
+                      {'color': '#FF6090', 'label': 'Pink'},
+                    ]
+                    .map(
+                      (map) => ChoiceChip(
+                        label: Text(map['label']!),
+                        selected:
+                            _toHex(_selectedColor).toUpperCase() ==
+                            map['color']!.toUpperCase(),
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(
+                              () =>
+                                  _selectedColor = parseHexColor(map['color']!),
+                            );
+                          }
+                        },
+                      ),
+                    )
+                    .toList(),
           ),
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         TextButton(
           onPressed: () {
             Navigator.pop(context, _selectedColor);
@@ -436,10 +511,7 @@ class _HsvColorPicker extends StatefulWidget {
   final Color initialColor;
   final ValueChanged<Color> onChanged;
 
-  const _HsvColorPicker({
-    required this.initialColor,
-    required this.onChanged,
-  });
+  const _HsvColorPicker({required this.initialColor, required this.onChanged});
 
   @override
   State<_HsvColorPicker> createState() => _HsvColorPickerState();
@@ -507,7 +579,8 @@ class _HsvColorPickerState extends State<_HsvColorPicker> {
               return GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onTapDown: (d) => _updateHue(d.localPosition.dx, width),
-                onHorizontalDragUpdate: (d) => _updateHue(d.localPosition.dx, width),
+                onHorizontalDragUpdate: (d) =>
+                    _updateHue(d.localPosition.dx, width),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: CustomPaint(
@@ -758,7 +831,10 @@ class _SpeedPickerDialogState extends State<SpeedPickerDialog> {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context, _currentSpeed),
           child: const Text('Select'),

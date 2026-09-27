@@ -24,7 +24,8 @@ class LibraryScreen extends ConsumerStatefulWidget {
   ConsumerState<LibraryScreen> createState() => _LibraryScreenState();
 }
 
-class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTickerProviderStateMixin {
+class _LibraryScreenState extends ConsumerState<LibraryScreen>
+    with SingleTickerProviderStateMixin {
   late TabController _tabController;
   String _currentTab = 'songs';
   bool _isGridView = false;
@@ -57,9 +58,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     final currentSong = ref.watch(audioPlayerProvider).currentSong;
     final colorScheme = Theme.of(context).colorScheme;
 
-    final filteredSongs = libraryState.searchQuery.isNotEmpty ||
-        libraryState.selectedAlbum.isNotEmpty ||
-        libraryState.selectedArtist.isNotEmpty
+    final filteredSongs =
+        libraryState.searchQuery.isNotEmpty ||
+            libraryState.selectedAlbum.isNotEmpty ||
+            libraryState.selectedArtist.isNotEmpty
         ? ref.read(libraryProvider.notifier).filteredSongs
         : libraryState.songs;
 
@@ -93,7 +95,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                         fillColor: colorScheme.surfaceContainerHighest,
                         contentPadding: const EdgeInsets.symmetric(vertical: 0),
                       ),
-                      onChanged: (query) => ref.read(libraryProvider.notifier).setSearchQuery(query),
+                      onChanged: (query) => ref
+                          .read(libraryProvider.notifier)
+                          .setSearchQuery(query),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -120,8 +124,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                     ),
                   if (_currentTab != 'songs' && _currentTab != 'playlists')
                     IconButton(
-                      icon: Icon(_isGridView ? Icons.view_list : Icons.grid_view),
-                      onPressed: () => setState(() => _isGridView = !_isGridView),
+                      icon: Icon(
+                        _isGridView ? Icons.view_list : Icons.grid_view,
+                      ),
+                      onPressed: () =>
+                          setState(() => _isGridView = !_isGridView),
                       tooltip: _isGridView ? 'List view' : 'Grid view',
                     ),
                 ],
@@ -150,7 +157,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                         Expanded(
                           child: Text(
                             libraryState.error!,
-                            style: TextStyle(color: colorScheme.onErrorContainer, fontSize: 13),
+                            style: TextStyle(
+                              color: colorScheme.onErrorContainer,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                       ],
@@ -172,10 +182,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                 child: _currentTab == 'songs'
                     ? _buildSongList(sortedSongs, currentSong)
                     : _currentTab == 'albums'
-                        ? _buildAlbumView(albumGroups, currentSong)
-                        : _currentTab == 'artists'
-                            ? _buildArtistView(artistGroups, currentSong)
-                            : _buildPlaylistList(playlistState.playlists),
+                    ? _buildAlbumView(albumGroups, currentSong)
+                    : _currentTab == 'artists'
+                    ? _buildArtistView(artistGroups, currentSong)
+                    : _buildPlaylistList(playlistState.playlists),
               ),
           ],
         ),
@@ -258,12 +268,19 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
             const SizedBox(height: 16),
             Text(
               'No songs in library',
-              style: TextStyle(color: colorScheme.onSurface, fontSize: 18, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: colorScheme.onSurface,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               'Add a folder to scan for music',
-              style: TextStyle(color: colorScheme.onSurface.withValues(alpha: 0.6), fontSize: 14),
+              style: TextStyle(
+                color: colorScheme.onSurface.withValues(alpha: 0.6),
+                fontSize: 14,
+              ),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
@@ -301,16 +318,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     );
   }
 
-  Widget _buildAlbumView(Map<String, List<SongEntity>> albumGroups, SongEntity? currentSong) {
+  Widget _buildAlbumView(
+    Map<String, List<SongEntity>> albumGroups,
+    SongEntity? currentSong,
+  ) {
     if (albumGroups.isEmpty) {
       final colorScheme = Theme.of(context).colorScheme;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.album_outlined, size: 64, color: colorScheme.onSurface.withValues(alpha: 0.4)),
+            Icon(
+              Icons.album_outlined,
+              size: 64,
+              color: colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
             const SizedBox(height: 16),
-            Text('No albums found', style: TextStyle(color: colorScheme.onSurface, fontSize: 16)),
+            Text(
+              'No albums found',
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
+            ),
           ],
         ),
       );
@@ -321,7 +348,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     return _buildAlbumList(albumGroups, currentSong);
   }
 
-  Widget _buildAlbumList(Map<String, List<SongEntity>> albumGroups, SongEntity? currentSong) {
+  Widget _buildAlbumList(
+    Map<String, List<SongEntity>> albumGroups,
+    SongEntity? currentSong,
+  ) {
     return ListView.builder(
       itemCount: albumGroups.length,
       itemBuilder: (context, index) {
@@ -350,7 +380,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     );
   }
 
-  Widget _buildAlbumGrid(Map<String, List<SongEntity>> albumGroups, SongEntity? currentSong) {
+  Widget _buildAlbumGrid(
+    Map<String, List<SongEntity>> albumGroups,
+    SongEntity? currentSong,
+  ) {
     final albums = albumGroups.keys.toList();
     return GridView.builder(
       padding: const EdgeInsets.all(12),
@@ -378,7 +411,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                   width: double.infinity,
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(10),
-                    color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.surfaceContainerHighest,
                   ),
                   child: _buildAlbumArt(songs.first, size: double.infinity),
                 ),
@@ -386,14 +421,22 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
               const SizedBox(height: 6),
               Text(
                 album,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
               ),
               Text(
                 '${songs.length} songs',
-                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
               ),
             ],
           ),
@@ -402,16 +445,26 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     );
   }
 
-  Widget _buildArtistView(Map<String, List<SongEntity>> artistGroups, SongEntity? currentSong) {
+  Widget _buildArtistView(
+    Map<String, List<SongEntity>> artistGroups,
+    SongEntity? currentSong,
+  ) {
     if (artistGroups.isEmpty) {
       final colorScheme = Theme.of(context).colorScheme;
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.person_outline, size: 64, color: colorScheme.onSurface.withValues(alpha: 0.4)),
+            Icon(
+              Icons.person_outline,
+              size: 64,
+              color: colorScheme.onSurface.withValues(alpha: 0.4),
+            ),
             const SizedBox(height: 16),
-            Text('No artists found', style: TextStyle(color: colorScheme.onSurface, fontSize: 16)),
+            Text(
+              'No artists found',
+              style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
+            ),
           ],
         ),
       );
@@ -422,7 +475,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     return _buildArtistList(artistGroups, currentSong);
   }
 
-  Widget _buildArtistList(Map<String, List<SongEntity>> artistGroups, SongEntity? currentSong) {
+  Widget _buildArtistList(
+    Map<String, List<SongEntity>> artistGroups,
+    SongEntity? currentSong,
+  ) {
     return ListView.builder(
       itemCount: artistGroups.length,
       itemBuilder: (context, index) {
@@ -433,7 +489,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
             child: Text(
               artist.isNotEmpty ? artist[0].toUpperCase() : '?',
-              style: TextStyle(color: Theme.of(context).colorScheme.onPrimaryContainer),
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
             ),
           ),
           title: Text(artist, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -457,7 +515,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
     );
   }
 
-  Widget _buildArtistGrid(Map<String, List<SongEntity>> artistGroups, SongEntity? currentSong) {
+  Widget _buildArtistGrid(
+    Map<String, List<SongEntity>> artistGroups,
+    SongEntity? currentSong,
+  ) {
     final artists = artistGroups.keys.toList();
     return GridView.builder(
       padding: const EdgeInsets.all(12),
@@ -502,14 +563,22 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
               const SizedBox(height: 6),
               Text(
                 artist,
-                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
               ),
               Text(
                 '${songs.length} songs',
-                style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5)),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.onSurface.withValues(alpha: 0.5),
+                ),
               ),
             ],
           ),
@@ -536,7 +605,13 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
               },
             ),
             const SizedBox(height: 16),
-            Text('No playlists yet', style: TextStyle(color: Theme.of(context).colorScheme.onSurface, fontSize: 16)),
+            Text(
+              'No playlists yet',
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+                fontSize: 16,
+              ),
+            ),
             const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: () async {
@@ -560,11 +635,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
           leading: Container(
             width: 48,
             height: 48,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-            ),
+            decoration: BoxDecoration(borderRadius: BorderRadius.circular(8)),
             clipBehavior: Clip.antiAlias,
-            child: playlist.coverArtPath != null && playlist.coverArtPath!.isNotEmpty && File(playlist.coverArtPath!).existsSync()
+            child:
+                playlist.coverArtPath != null &&
+                    playlist.coverArtPath!.isNotEmpty &&
+                    File(playlist.coverArtPath!).existsSync()
                 ? Image.file(File(playlist.coverArtPath!), fit: BoxFit.cover)
                 : Container(
                     decoration: BoxDecoration(
@@ -578,7 +654,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
                       ),
                     ),
                     child: const Center(
-                      child: Icon(Icons.queue_music, color: Colors.white, size: 24),
+                      child: Icon(
+                        Icons.queue_music,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
           ),
@@ -587,7 +667,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
           trailing: PopupMenuButton(
             itemBuilder: (ctx) => [
               const PopupMenuItem(value: 'rename', child: Text('Rename')),
-              const PopupMenuItem(value: 'delete', child: Text('Delete', style: TextStyle(color: Colors.red))),
+              const PopupMenuItem(
+                value: 'delete',
+                child: Text('Delete', style: TextStyle(color: Colors.red)),
+              ),
             ],
             onSelected: (value) {
               if (value == 'delete') {
@@ -649,10 +732,22 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen> with SingleTicker
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               if (controller.text.trim().isNotEmpty) {
-                ref.read(playlistProvider.notifier).renamePlaylist(playlist.id, controller.text.trim());
-                Navigator.pop(ctx);
+                try {
+                  await ref
+                      .read(playlistProvider.notifier)
+                      .renamePlaylist(playlist.id, controller.text.trim());
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (error) {
+                  if (ctx.mounted) {
+                    ScaffoldMessenger.of(ctx).showSnackBar(
+                      SnackBar(
+                        content: Text('Could not rename playlist: $error'),
+                      ),
+                    );
+                  }
+                }
               }
             },
             child: const Text('Rename'),

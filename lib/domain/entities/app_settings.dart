@@ -36,7 +36,6 @@ class AppSettings {
   final ThemePreset themePreset;
   final bool crossfadeEnabled;
   final int crossfadeDurationMs;
-  final bool gaplessPlayback;
   final AppSettingsRepeatMode defaultRepeatMode;
   final bool defaultShuffle;
   final bool autoScanEnabled;
@@ -47,7 +46,6 @@ class AppSettings {
   final WaveformStyle waveformStyle;
   final double waveformAnimationSpeed;
   final NowPlayingTheme nowPlayingTheme;
-  final bool showMediaNotification;
   final bool notificationOngoing;
   final bool stopOnPause;
   final bool autoplayEnabled;
@@ -56,7 +54,6 @@ class AppSettings {
     this.themePreset = ThemePreset.dark,
     this.crossfadeEnabled = false,
     this.crossfadeDurationMs = 300,
-    this.gaplessPlayback = true,
     this.defaultRepeatMode = AppSettingsRepeatMode.off,
     this.defaultShuffle = false,
     this.autoScanEnabled = true,
@@ -67,7 +64,6 @@ class AppSettings {
     this.waveformStyle = WaveformStyle.bars,
     this.waveformAnimationSpeed = 1.0,
     this.nowPlayingTheme = NowPlayingTheme.classic,
-    this.showMediaNotification = true,
     this.notificationOngoing = true,
     this.stopOnPause = true,
     this.autoplayEnabled = true,
@@ -77,7 +73,6 @@ class AppSettings {
     ThemePreset? themePreset,
     bool? crossfadeEnabled,
     int? crossfadeDurationMs,
-    bool? gaplessPlayback,
     AppSettingsRepeatMode? defaultRepeatMode,
     bool? defaultShuffle,
     bool? autoScanEnabled,
@@ -88,7 +83,6 @@ class AppSettings {
     WaveformStyle? waveformStyle,
     double? waveformAnimationSpeed,
     NowPlayingTheme? nowPlayingTheme,
-    bool? showMediaNotification,
     bool? notificationOngoing,
     bool? stopOnPause,
     bool? autoplayEnabled,
@@ -97,7 +91,6 @@ class AppSettings {
       themePreset: themePreset ?? this.themePreset,
       crossfadeEnabled: crossfadeEnabled ?? this.crossfadeEnabled,
       crossfadeDurationMs: crossfadeDurationMs ?? this.crossfadeDurationMs,
-      gaplessPlayback: gaplessPlayback ?? this.gaplessPlayback,
       defaultRepeatMode: defaultRepeatMode ?? this.defaultRepeatMode,
       defaultShuffle: defaultShuffle ?? this.defaultShuffle,
       autoScanEnabled: autoScanEnabled ?? this.autoScanEnabled,
@@ -108,7 +101,6 @@ class AppSettings {
       waveformStyle: waveformStyle ?? this.waveformStyle,
       waveformAnimationSpeed: waveformAnimationSpeed ?? this.waveformAnimationSpeed,
       nowPlayingTheme: nowPlayingTheme ?? this.nowPlayingTheme,
-      showMediaNotification: showMediaNotification ?? this.showMediaNotification,
       notificationOngoing: notificationOngoing ?? this.notificationOngoing,
       stopOnPause: stopOnPause ?? this.stopOnPause,
       autoplayEnabled: autoplayEnabled ?? this.autoplayEnabled,
@@ -120,7 +112,6 @@ class AppSettings {
       'themePreset': themePreset.index,
       'crossfadeEnabled': crossfadeEnabled,
       'crossfadeDurationMs': crossfadeDurationMs,
-      'gaplessPlayback': gaplessPlayback,
       'defaultRepeatMode': defaultRepeatMode.index,
       'defaultShuffle': defaultShuffle,
       'autoScanEnabled': autoScanEnabled,
@@ -131,7 +122,6 @@ class AppSettings {
       'waveformStyle': waveformStyle.index,
       'waveformAnimationSpeed': waveformAnimationSpeed,
       'nowPlayingTheme': nowPlayingTheme.index,
-      'showMediaNotification': showMediaNotification,
       'notificationOngoing': notificationOngoing,
       'stopOnPause': stopOnPause,
       'autoplayEnabled': autoplayEnabled,
@@ -148,7 +138,6 @@ class AppSettings {
       crossfadeDurationMs: json['crossfadeDurationMs'] is num
           ? (json['crossfadeDurationMs'] as num).toInt()
           : 300,
-      gaplessPlayback: json['gaplessPlayback'] != false,
       defaultRepeatMode: _enumFromIndex<AppSettingsRepeatMode>(
           json['defaultRepeatMode'], AppSettingsRepeatMode.values, AppSettingsRepeatMode.off),
       defaultShuffle: json['defaultShuffle'] == true,
@@ -165,7 +154,6 @@ class AppSettings {
           : 1.0,
       nowPlayingTheme: _enumFromIndex<NowPlayingTheme>(
           json['nowPlayingTheme'], NowPlayingTheme.values, NowPlayingTheme.classic),
-      showMediaNotification: json['showMediaNotification'] != false,
       notificationOngoing: json['notificationOngoing'] != false,
       stopOnPause: json['stopOnPause'] != false,
       autoplayEnabled: json['autoplayEnabled'] != false,

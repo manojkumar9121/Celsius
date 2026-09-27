@@ -10,6 +10,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:celsius/data/local_storage/hive_storage.dart';
 import 'package:celsius/data/local_storage/song_box.dart';
 import 'package:celsius/domain/entities/song_entity.dart';
+import 'package:celsius/presentation/providers/audio_player_provider.dart';
+import 'package:celsius/presentation/providers/playlist_provider.dart';
+import 'package:celsius/presentation/providers/settings_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 const _channel = MethodChannel('com.celsius.celsius/audio_scanner');
@@ -20,11 +23,14 @@ const _channel = MethodChannel('com.celsius.celsius/audio_scanner');
 /// during scans to repair the corrupted rows.
 const int _kSuspiciousDurationMs = 10000;
 
-final libraryProvider = StateNotifierProvider<LibraryNotifier, LibraryState>((ref) {
-  return LibraryNotifier();
+final libraryProvider = StateNotifierProvider<LibraryNotifier, LibraryState>((
+  ref,
+) {
+  return LibraryNotifier(ref);
 });
 
 class LibraryNotifier extends StateNotifier<LibraryState> {
+  final Ref _ref;
   final FlutterAudioTagger _tagger = FlutterAudioTagger();
   final AudioPlayer _durationPlayer = AudioPlayer();
   bool _artworkExtractionRunning = false;
@@ -32,8 +38,9 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
   String _selectedAlbum = '';
   String _selectedArtist = '';
 
-  LibraryNotifier() : super(const LibraryState()) {
-    _init();
+  LibraryNotifier(this._ref, {bool initialize = true})
+    : super(const LibraryState()) {
+    if (initialize) _init();
   }
 
   Future<void> _init() async {
@@ -47,7 +54,9 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
       // show up immediately instead of on the next app start.
       if (mounted) {
         state = state.copyWith(
-          songs: HiveStorage.getAllSongs().map((box) => box.toEntity()).toList(),
+          songs: HiveStorage.getAllSongs()
+              .map((box) => box.toEntity())
+              .toList(),
         );
       }
     }
@@ -61,7 +70,7 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     try {
       state = state.copyWith(
         songs: HiveStorage.getAllSongs().map((box) => box.toEntity()).toList(),
-        error: null,
+        clearError: true,
       );
     } catch (e) {
       state = state.copyWith(error: e.toString());
@@ -103,9 +112,14 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     _artworkExtractionRunning = true;
     try {
       final allSongs = HiveStorage.getAllSongs();
-      final missing = allSongs.where((box) =>
-          box.coverArtPath == null || box.coverArtPath!.isEmpty ||
-          !File(box.coverArtPath!).existsSync()).toList();
+      final missing = allSongs
+          .where(
+            (box) =>
+                box.coverArtPath == null ||
+                box.coverArtPath!.isEmpty ||
+                !File(box.coverArtPath!).existsSync(),
+          )
+          .toList();
       if (missing.isEmpty) return;
 
       for (final box in missing) {
@@ -115,7 +129,10 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
           if (filePath.startsWith('content://')) {
             try {
-              final result = await _channel.invokeMethod<Uint8List>('extractArtwork', {'path': filePath});
+              final result = await _channel.invokeMethod<Uint8List>(
+                'extractArtwork',
+                {'path': filePath},
+              );
               artwork = result;
             } catch (e) {
               debugPrint('Native artwork extraction failed for $filePath: $e');
@@ -123,20 +140,30 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
           }
 
           if (artwork == null || artwork.isEmpty) {
-            final taggerPath = (box.realPath != null && box.realPath!.isNotEmpty) ? box.realPath! : filePath;
+            final taggerPath =
+                (box.realPath != null && box.realPath!.isNotEmpty)
+                ? box.realPath!
+                : filePath;
             try {
               artwork = await _tagger.getArtWork(taggerPath);
             } catch (e) {
-              debugPrint('Tagger artwork extraction failed for $taggerPath: $e');
+              debugPrint(
+                'Tagger artwork extraction failed for $taggerPath: $e',
+              );
             }
           }
 
           if (artwork == null || artwork.isEmpty) {
             try {
-              final result = await _channel.invokeMethod<Uint8List>('extractArtwork', {'path': filePath});
+              final result = await _channel.invokeMethod<Uint8List>(
+                'extractArtwork',
+                {'path': filePath},
+              );
               artwork = result;
             } catch (e) {
-              debugPrint('Fallback native artwork extraction failed for $filePath: $e');
+              debugPrint(
+                'Fallback native artwork extraction failed for $filePath: $e',
+              );
             }
           }
 
@@ -150,8 +177,19 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
             final coverFile = File('${coverDir.path}/${box.id}$ext');
             await coverFile.writeAsBytes(artwork);
             if (await coverFile.exists() && await coverFile.length() > 0) {
-              box.coverArtPath = coverFile.path;
-              await HiveStorage.updateSong(box);
+              final updated = await HiveStorage.updateSongCoverArt(
+                box.id,
+                coverFile.path,
+              );
+              if (updated == null) {
+                // The song was deleted while extraction was running. Do not
+                // leave the newly-created cover orphaned.
+                try {
+                  await coverFile.delete();
+                } catch (error) {
+                  debugPrint('Failed to remove orphaned cover art: $error');
+                }
+              }
             }
           }
         } catch (e) {
@@ -159,7 +197,9 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
         }
       }
 
-      final updatedSongs = HiveStorage.getAllSongs().map((box) => box.toEntity()).toList();
+      final updatedSongs = HiveStorage.getAllSongs()
+          .map((box) => box.toEntity())
+          .toList();
       if (mounted) {
         state = state.copyWith(songs: updatedSongs);
       }
@@ -178,7 +218,7 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
   }
 
   Future<void> loadSongs() async {
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, clearError: true);
     try {
       final existingSongs = HiveStorage.getAllSongs();
       state = state.copyWith(
@@ -192,10 +232,14 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
   }
 
   Future<void> scanFolder(String folderPath) async {
-    state = state.copyWith(isScanning: true, scanningProgress: 0.0, error: null);
+    state = state.copyWith(
+      isScanning: true,
+      scanningProgress: 0.0,
+      clearError: true,
+    );
     try {
       await _scanFolderInternal(folderPath, showProgress: true);
-      await HiveStorage.addManagedFolder(folderPath);
+      await _ref.read(settingsProvider.notifier).addManagedFolder(folderPath);
       final allSongs = HiveStorage.getAllSongs();
       if (mounted) {
         state = state.copyWith(
@@ -213,20 +257,37 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
         state = state.copyWith(
           isScanning: false,
           scanningProgress: 0.0,
-          error: state.error ?? 'Scan failed: $e',
+          error: 'Scan failed: $e',
         );
       }
     }
   }
 
-  Future<void> _scanFolderInternal(String folderPath, {required bool showProgress}) {
-    final result = _scanQueue.then((_) => _scanFolderInternalSerialized(folderPath, showProgress: showProgress));
+  Future<void> _scanFolderInternal(
+    String folderPath, {
+    required bool showProgress,
+  }) {
+    final result = _scanQueue.then(
+      (_) =>
+          _scanFolderInternalSerialized(folderPath, showProgress: showProgress),
+    );
     _scanQueue = result.catchError((_) {});
     return result;
   }
 
-  Future<void> _scanFolderInternalSerialized(String folderPath, {required bool showProgress}) async {
-    final audioExtensions = ['.mp3', '.flac', '.ogg', '.aac', '.m4a', '.wav', '.opus'];
+  Future<void> _scanFolderInternalSerialized(
+    String folderPath, {
+    required bool showProgress,
+  }) async {
+    final audioExtensions = [
+      '.mp3',
+      '.flac',
+      '.ogg',
+      '.aac',
+      '.m4a',
+      '.wav',
+      '.opus',
+    ];
     final allFiles = <Map<String, String>>[];
 
     bool manageStorageGranted = false;
@@ -246,14 +307,19 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
         if (await dir.exists()) {
           await for (final entity in dir.list(recursive: true)) {
             if (entity is File) {
-              final ext = audioExtensions.any((e) => entity.path.toLowerCase().endsWith(e));
+              final ext = audioExtensions.any(
+                (e) => entity.path.toLowerCase().endsWith(e),
+              );
               if (ext) {
                 allFiles.add({'path': entity.path, 'uri': ''});
               }
             }
           }
         } else {
-          state = state.copyWith(error: 'Folder not found: $folderPath', isScanning: false);
+          state = state.copyWith(
+            error: 'Folder not found: $folderPath',
+            isScanning: false,
+          );
           await _pruneMissingSongs(folderPath);
           return;
         }
@@ -274,14 +340,17 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
           : await Permission.storage.request();
       if (!status.isGranted) {
         state = state.copyWith(
-          error: 'Cannot access audio files. Please grant storage permission in App Settings.',
+          error:
+              'Cannot access audio files. Please grant storage permission in App Settings.',
           isScanning: false,
         );
         return;
       }
 
       try {
-        final result = await _channel.invokeMethod<List<dynamic>>('scanMediaStore');
+        final result = await _channel.invokeMethod<List<dynamic>>(
+          'scanMediaStore',
+        );
         if (result != null) {
           for (final entry in result) {
             final map = Map<String, dynamic>.from(entry as Map);
@@ -306,7 +375,7 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
           }
         }
       } catch (e) {
-            debugPrint('MediaStore scan failed: $e');
+        debugPrint('MediaStore scan failed: $e');
       }
     }
 
@@ -320,6 +389,13 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
     int processed = 0;
     final total = allFiles.length;
+    // Progress without re-reading the box: the loop used to decode the
+    // entire library on every file (O(N²) on big scans). Emit progress
+    // cheaply and do a single reload when the scan finishes (scanFolder
+    // already reloads from storage afterwards).
+    var lastProgressUpdate = DateTime.now();
+    const progressEveryN = 10;
+    const progressThrottle = Duration(milliseconds: 500);
 
     for (final fileInfo in allFiles) {
       final filePath = fileInfo['path']!;
@@ -354,15 +430,18 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
           corrected = song?.durationMs ?? 0;
         }
         if (corrected > 0 && corrected != existingBox.durationMs) {
-          existingBox.durationMs = corrected;
-          await HiveStorage.updateSong(existingBox);
+          await HiveStorage.updateSongDuration(existingBox.id, corrected);
         }
       }
       processed++;
-      if (showProgress && mounted) {
-        final allSongs = HiveStorage.getAllSongs();
+      final now = DateTime.now();
+      if (showProgress &&
+          mounted &&
+          (processed == total ||
+              processed % progressEveryN == 0 ||
+              now.difference(lastProgressUpdate) > progressThrottle)) {
+        lastProgressUpdate = now;
         state = state.copyWith(
-          songs: allSongs.map((box) => box.toEntity()).toList(),
           isScanning: true,
           scanningProgress: processed / total,
         );
@@ -376,27 +455,29 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     final prefix = folderPath.endsWith('/') ? folderPath : '$folderPath/';
     final removedIds = <String>[];
     for (final song in HiveStorage.getAllSongs()) {
-      final inFolder = (song.filePath.isNotEmpty && song.filePath.startsWith(prefix)) ||
-          (song.realPath?.isNotEmpty == true && song.realPath!.startsWith(prefix));
+      final inFolder =
+          (song.filePath.isNotEmpty && song.filePath.startsWith(prefix)) ||
+          (song.realPath?.isNotEmpty == true &&
+              song.realPath!.startsWith(prefix));
       if (!inFolder) continue;
       if (song.filePath.startsWith('content://') &&
           (song.realPath == null || song.realPath!.isEmpty)) {
         continue;
       }
-      final fileExists = _fileExists(song.filePath) || _fileExists(song.realPath);
+      final fileExists =
+          _fileExists(song.filePath) || _fileExists(song.realPath);
       if (!fileExists) {
         removedIds.add(song.id);
       }
     }
     if (removedIds.isEmpty) return;
 
-    await HiveStorage.deleteSongs(removedIds);
-    if (mounted) {
-      state = state.copyWith(
-        songs: state.songs.where((s) => !removedIds.contains(s.id)).toList(),
-      );
-    }
-    debugPrint('Removed ${removedIds.length} songs with missing files from $folderPath');
+    final result = await _removeSongs(removedIds);
+    debugPrint(
+      'Removal result for ${removedIds.length} missing songs in $folderPath: '
+      'storage=${result.storageError}, playlist=${result.playlistError}, '
+      'audio=${result.audioError}',
+    );
   }
 
   bool _fileExists(String? path) {
@@ -414,12 +495,16 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     int preDurationMs = 0,
   }) async {
     int durationMs = preDurationMs;
-    final taggerPath = (realPath != null && realPath.isNotEmpty) ? realPath : filePath;
+    final taggerPath = (realPath != null && realPath.isNotEmpty)
+        ? realPath
+        : filePath;
 
     if (durationMs == 0) {
       try {
         if (filePath.startsWith('content://')) {
-          await _durationPlayer.setAudioSource(AudioSource.uri(Uri.parse(filePath)));
+          await _durationPlayer.setAudioSource(
+            AudioSource.uri(Uri.parse(filePath)),
+          );
         } else {
           await _durationPlayer.setFilePath(taggerPath);
         }
@@ -436,7 +521,9 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     }
 
     try {
-      final idPath = (realPath != null && realPath.isNotEmpty) ? realPath : filePath;
+      final idPath = (realPath != null && realPath.isNotEmpty)
+          ? realPath
+          : filePath;
       final id = _generateId(idPath);
       String title;
       String artist;
@@ -450,17 +537,27 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
       } else {
         try {
           final tag = await _tagger.getAllTags(taggerPath);
-          if (tag != null && (tag.title?.isNotEmpty == true || tag.artist?.isNotEmpty == true)) {
-            title = tag.title?.isNotEmpty == true ? tag.title! : _extractTitleFromFile(filePath);
-            artist = tag.artist?.isNotEmpty == true ? tag.artist! : 'Unknown Artist';
-            album = tag.album?.isNotEmpty == true ? tag.album! : 'Unknown Album';
+          if (tag != null &&
+              (tag.title?.isNotEmpty == true ||
+                  tag.artist?.isNotEmpty == true)) {
+            title = tag.title?.isNotEmpty == true
+                ? tag.title!
+                : _extractTitleFromFile(filePath);
+            artist = tag.artist?.isNotEmpty == true
+                ? tag.artist!
+                : 'Unknown Artist';
+            album = tag.album?.isNotEmpty == true
+                ? tag.album!
+                : 'Unknown Album';
           } else {
             throw Exception('Empty tags from tagger');
           }
         } catch (e) {
           debugPrint('Error reading tags via tagger from $taggerPath: $e');
           try {
-            final nativeTags = await _channel.invokeMethod<Map>('extractTags', {'path': filePath});
+            final nativeTags = await _channel.invokeMethod<Map>('extractTags', {
+              'path': filePath,
+            });
             if (nativeTags != null) {
               final nativeTitle = (nativeTags['title'] as String?)?.trim();
               final nativeArtist = (nativeTags['artist'] as String?)?.trim();
@@ -492,7 +589,9 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
               album = 'Unknown Album';
             }
           } catch (nativeError) {
-            debugPrint('Error reading tags via native from $filePath: $nativeError');
+            debugPrint(
+              'Error reading tags via native from $filePath: $nativeError',
+            );
             title = _extractTitleFromFile(filePath);
             artist = 'Unknown Artist';
             album = 'Unknown Album';
@@ -504,7 +603,10 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
       if (filePath.startsWith('content://')) {
         try {
-          final result = await _channel.invokeMethod<Uint8List>('extractArtwork', {'path': filePath});
+          final result = await _channel.invokeMethod<Uint8List>(
+            'extractArtwork',
+            {'path': filePath},
+          );
           artwork = result;
         } catch (e) {
           debugPrint('Native artwork extraction failed for $filePath: $e');
@@ -521,10 +623,15 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
       if (artwork == null || artwork.isEmpty) {
         try {
-          final result = await _channel.invokeMethod<Uint8List>('extractArtwork', {'path': filePath});
+          final result = await _channel.invokeMethod<Uint8List>(
+            'extractArtwork',
+            {'path': filePath},
+          );
           artwork = result;
         } catch (e) {
-          debugPrint('Fallback native artwork extraction failed for $filePath: $e');
+          debugPrint(
+            'Fallback native artwork extraction failed for $filePath: $e',
+          );
         }
       }
 
@@ -546,40 +653,52 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
         }
       }
 
-      return SongBox.fromEntity(SongEntity(
-        id: id,
-        title: title,
-        artist: artist,
-        album: album,
-        durationMs: durationMs,
-        filePath: filePath,
-        realPath: realPath,
-        coverArtPath: coverArtPath,
-        dateAdded: DateTime.now(),
-      ));
+      return SongBox.fromEntity(
+        SongEntity(
+          id: id,
+          title: title,
+          artist: artist,
+          album: album,
+          durationMs: durationMs,
+          filePath: filePath,
+          realPath: realPath,
+          coverArtPath: coverArtPath,
+          dateAdded: DateTime.now(),
+        ),
+      );
     } catch (e) {
       debugPrint('Error reading metadata from $taggerPath: $e');
-      final idPath = (realPath != null && realPath.isNotEmpty) ? realPath : filePath;
+      final idPath = (realPath != null && realPath.isNotEmpty)
+          ? realPath
+          : filePath;
       final id = _generateId(idPath);
-      return SongBox.fromEntity(SongEntity(
-        id: id,
-        title: preTitle ?? _extractTitleFromFile(filePath),
-        filePath: filePath,
-        realPath: realPath,
-        dateAdded: DateTime.now(),
-      ));
+      return SongBox.fromEntity(
+        SongEntity(
+          id: id,
+          title: preTitle ?? _extractTitleFromFile(filePath),
+          filePath: filePath,
+          realPath: realPath,
+          dateAdded: DateTime.now(),
+        ),
+      );
     }
   }
 
   String _getImageExtension(List<int> bytes) {
     if (bytes.length >= 4) {
-      if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
+      if (bytes[0] == 0x89 &&
+          bytes[1] == 0x50 &&
+          bytes[2] == 0x4E &&
+          bytes[3] == 0x47) {
         return '.png';
       }
       if (bytes[0] == 0xFF && bytes[1] == 0xD8 && bytes[2] == 0xFF) {
         return '.jpg';
       }
-      if (bytes[0] == 0x52 && bytes[1] == 0x49 && bytes[2] == 0x46 && bytes[3] == 0x46) {
+      if (bytes[0] == 0x52 &&
+          bytes[1] == 0x49 &&
+          bytes[2] == 0x46 &&
+          bytes[3] == 0x46) {
         return '.webp';
       }
     }
@@ -588,26 +707,120 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
   String _extractTitleFromFile(String filePath) {
     final fileName = filePath.split('/').last;
-    return fileName.replaceAll(RegExp(r'\.[^.]+$'), '').replaceAll(RegExp(r'[_-]'), ' ');
+    return fileName
+        .replaceAll(RegExp(r'\.[^.]+$'), '')
+        .replaceAll(RegExp(r'[_-]'), ' ');
   }
 
-  void clearLibrary() {
-    HiveStorage.clearAllSongs();
-    state = state.copyWith(songs: []);
+  Future<SongRemovalResult> clearLibrary() async {
+    final ids = state.songs.map((s) => s.id).toList();
+    return _removeSongs(ids);
   }
 
-  void removeSong(String songId) {
-    HiveStorage.deleteSong(songId);
-    state = state.copyWith(songs: state.songs.where((s) => s.id != songId).toList());
+  Future<SongRemovalResult> removeSong(String songId) {
+    return _removeSongs([songId]);
   }
 
-  void toggleFavorite(String songId) {
-    HiveStorage.toggleFavorite(songId);
-    final updatedSongs = state.songs.map((s) {
-      if (s.id == songId) return s.copyWith(isFavorite: !s.isFavorite);
-      return s;
-    }).toList();
-    state = state.copyWith(songs: updatedSongs);
+  /// Deletes [ids] from storage, then independently prunes playlists and the
+  /// playback queue so every dependent cleanup is attempted and reported.
+  Future<SongRemovalResult> _removeSongs(List<String> ids) async {
+    final idSet = ids.toSet();
+    if (idSet.isEmpty) {
+      return SongRemovalResult(removedSongIds: idSet);
+    }
+
+    final previousSongs = state.songs;
+    state = state.copyWith(
+      songs: previousSongs.where((song) => !idSet.contains(song.id)).toList(),
+      clearError: true,
+    );
+    final playlistNotifier = _ref.read(playlistProvider.notifier);
+    final audioNotifier = _ref.read(audioPlayerProvider.notifier);
+
+    try {
+      await HiveStorage.deleteSongs(ids);
+    } catch (storageError) {
+      if (mounted) {
+        List<SongEntity> persisted;
+        try {
+          persisted = HiveStorage.getAllSongs()
+              .map((box) => box.toEntity())
+              .toList();
+        } catch (_) {
+          persisted = previousSongs;
+        }
+        state = state.copyWith(
+          songs: persisted,
+          error: 'Could not remove songs: $storageError',
+        );
+      }
+      return SongRemovalResult(
+        removedSongIds: idSet,
+        storageError: storageError,
+      );
+    }
+
+    Object? playlistError;
+    try {
+      await HiveStorage.pruneSongIdsFromPlaylists(ids);
+      await playlistNotifier.reload();
+    } catch (error) {
+      playlistError = error;
+      debugPrint('Playlist cleanup after song removal failed: $error');
+    }
+
+    Object? audioError;
+    try {
+      await audioNotifier.handleSongsRemoved(ids);
+    } catch (error) {
+      audioError = error;
+      debugPrint('Queue cleanup after song removal failed: $error');
+    }
+
+    if (mounted) {
+      final failures = [
+        if (playlistError != null) 'playlist: $playlistError',
+        if (audioError != null) 'audio: $audioError',
+      ];
+      state = state.copyWith(
+        clearError: failures.isEmpty,
+        error: failures.isEmpty
+            ? null
+            : 'Song cleanup failed (${failures.join('; ')})',
+      );
+    }
+    return SongRemovalResult(
+      removedSongIds: idSet,
+      playlistError: playlistError,
+      audioError: audioError,
+    );
+  }
+
+  Future<SongEntity?> toggleFavorite(String songId) async {
+    try {
+      final persisted = await HiveStorage.toggleFavorite(songId);
+      if (persisted == null) {
+        if (mounted) {
+          state = state.copyWith(error: 'Song no longer exists in storage');
+        }
+        return null;
+      }
+      final committed = persisted.toEntity();
+      if (mounted) {
+        state = state.copyWith(
+          songs: [
+            for (final song in state.songs)
+              if (song.id == committed.id) committed else song,
+          ],
+          clearError: true,
+        );
+        _ref.read(audioPlayerProvider.notifier).applyCommittedSong(committed);
+      }
+      return committed;
+    } catch (error) {
+      if (mounted) state = state.copyWith(error: error.toString());
+      rethrow;
+    }
   }
 
   void setSearchQuery(String query) {
@@ -621,7 +834,10 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
       _selectedAlbum = album;
       _selectedArtist = '';
     }
-    state = state.copyWith(selectedAlbum: _selectedAlbum, selectedArtist: _selectedArtist);
+    state = state.copyWith(
+      selectedAlbum: _selectedAlbum,
+      selectedArtist: _selectedArtist,
+    );
   }
 
   void selectArtist(String artist) {
@@ -631,7 +847,10 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
       _selectedArtist = artist;
       _selectedAlbum = '';
     }
-    state = state.copyWith(selectedAlbum: _selectedAlbum, selectedArtist: _selectedArtist);
+    state = state.copyWith(
+      selectedAlbum: _selectedAlbum,
+      selectedArtist: _selectedArtist,
+    );
   }
 
   List<SongEntity> get filteredSongs {
@@ -639,10 +858,14 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
     if (state.searchQuery.isNotEmpty) {
       final query = state.searchQuery.toLowerCase();
-      songs = songs.where((s) =>
-          s.title.toLowerCase().contains(query) ||
-          s.artist.toLowerCase().contains(query) ||
-          s.album.toLowerCase().contains(query)).toList();
+      songs = songs
+          .where(
+            (s) =>
+                s.title.toLowerCase().contains(query) ||
+                s.artist.toLowerCase().contains(query) ||
+                s.album.toLowerCase().contains(query),
+          )
+          .toList();
     }
 
     if (_selectedAlbum.isNotEmpty) {
@@ -659,10 +882,20 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
   List<String> get albums {
     final querySongs = state.searchQuery.isEmpty
         ? state.songs
-        : state.songs.where((s) =>
-            s.title.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
-            s.artist.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
-            s.album.toLowerCase().contains(state.searchQuery.toLowerCase())).toList();
+        : state.songs
+              .where(
+                (s) =>
+                    s.title.toLowerCase().contains(
+                      state.searchQuery.toLowerCase(),
+                    ) ||
+                    s.artist.toLowerCase().contains(
+                      state.searchQuery.toLowerCase(),
+                    ) ||
+                    s.album.toLowerCase().contains(
+                      state.searchQuery.toLowerCase(),
+                    ),
+              )
+              .toList();
     final albumSet = querySongs.map((s) => s.album).toSet();
     return albumSet.toList()..sort();
   }
@@ -670,10 +903,20 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
   List<String> get artists {
     final querySongs = state.searchQuery.isEmpty
         ? state.songs
-        : state.songs.where((s) =>
-            s.title.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
-            s.artist.toLowerCase().contains(state.searchQuery.toLowerCase()) ||
-            s.album.toLowerCase().contains(state.searchQuery.toLowerCase())).toList();
+        : state.songs
+              .where(
+                (s) =>
+                    s.title.toLowerCase().contains(
+                      state.searchQuery.toLowerCase(),
+                    ) ||
+                    s.artist.toLowerCase().contains(
+                      state.searchQuery.toLowerCase(),
+                    ) ||
+                    s.album.toLowerCase().contains(
+                      state.searchQuery.toLowerCase(),
+                    ),
+              )
+              .toList();
     final artistSet = querySongs.map((s) => s.artist).toSet();
     return artistSet.toList()..sort();
   }
@@ -696,15 +939,21 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
 
   /// Waits for the player to report a non-zero duration, with a 10s timeout.
   /// Returns null if the duration is not available within the timeout.
-  Future<Duration?> _waitForDuration(AudioPlayer player, {Duration timeout = const Duration(seconds: 10)}) async {
+  Future<Duration?> _waitForDuration(
+    AudioPlayer player, {
+    Duration timeout = const Duration(seconds: 10),
+  }) async {
     Completer<Duration?> completer = Completer<Duration?>();
-    final sub = player.durationStream.listen((dur) {
-      if (dur != null && dur.inMilliseconds > 0 && !completer.isCompleted) {
-        completer.complete(dur);
-      }
-    }, onError: (Object e) {
-      if (!completer.isCompleted) completer.complete(null);
-    });
+    final sub = player.durationStream.listen(
+      (dur) {
+        if (dur != null && dur.inMilliseconds > 0 && !completer.isCompleted) {
+          completer.complete(dur);
+        }
+      },
+      onError: (Object e) {
+        if (!completer.isCompleted) completer.complete(null);
+      },
+    );
     try {
       return await completer.future.timeout(timeout, onTimeout: () => null);
     } finally {
@@ -717,6 +966,24 @@ class LibraryNotifier extends StateNotifier<LibraryState> {
     _durationPlayer.dispose();
     super.dispose();
   }
+}
+
+class SongRemovalResult {
+  final Set<String> removedSongIds;
+  final Object? storageError;
+  final Object? playlistError;
+  final Object? audioError;
+
+  const SongRemovalResult({
+    required this.removedSongIds,
+    this.storageError,
+    this.playlistError,
+    this.audioError,
+  });
+
+  bool get hasCleanupFailures => playlistError != null || audioError != null;
+
+  bool get hasFailures => storageError != null || hasCleanupFailures;
 }
 
 class LibraryState {
@@ -749,6 +1016,10 @@ class LibraryState {
     double? scanningProgress,
     List<String>? scannedFolders,
     String? error,
+    // `error: null` means "no change" (Dart can't distinguish it from
+    // "clear"), so pass [clearError] to dismiss a stale banner when new
+    // work starts.
+    bool clearError = false,
     String? searchQuery,
     String? selectedAlbum,
     String? selectedArtist,
@@ -759,7 +1030,7 @@ class LibraryState {
       isScanning: isScanning ?? this.isScanning,
       scanningProgress: scanningProgress ?? this.scanningProgress,
       scannedFolders: scannedFolders ?? this.scannedFolders,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
       searchQuery: searchQuery ?? this.searchQuery,
       selectedAlbum: selectedAlbum ?? this.selectedAlbum,
       selectedArtist: selectedArtist ?? this.selectedArtist,

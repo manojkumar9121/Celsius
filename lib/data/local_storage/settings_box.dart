@@ -16,6 +16,7 @@ class SettingsBox extends HiveObject {
   @HiveField(2)
   late int crossfadeDurationMs;
 
+  // Legacy binary field: no longer mapped (gapless was never wired).
   @HiveField(3)
   late bool gaplessPlayback;
 
@@ -46,6 +47,7 @@ class SettingsBox extends HiveObject {
   @HiveField(12)
   String? accentColor;
 
+  // Legacy binary field: no longer mapped (never wired to audio_service).
   @HiveField(14, defaultValue: true)
   late bool showMediaNotification;
 
@@ -66,7 +68,6 @@ class SettingsBox extends HiveObject {
       themePreset: ThemePreset.values[themePresetIndex],
       crossfadeEnabled: crossfadeEnabled,
       crossfadeDurationMs: crossfadeDurationMs,
-      gaplessPlayback: gaplessPlayback,
       defaultRepeatMode: AppSettingsRepeatMode.values[repeatModeIndex],
       defaultShuffle: defaultShuffle,
       autoScanEnabled: autoScanEnabled,
@@ -76,7 +77,6 @@ class SettingsBox extends HiveObject {
       waveformAnimationSpeed: waveformAnimationSpeed,
       primaryColor: primaryColor,
       accentColor: accentColor,
-      showMediaNotification: showMediaNotification,
       notificationOngoing: notificationOngoing,
       stopOnPause: stopOnPause,
       autoplayEnabled: autoplayEnabled,
@@ -88,7 +88,6 @@ class SettingsBox extends HiveObject {
     box.themePreset = settings.themePreset.index;
     box.crossfadeEnabled = settings.crossfadeEnabled;
     box.crossfadeDurationMs = settings.crossfadeDurationMs;
-    box.gaplessPlayback = settings.gaplessPlayback;
     box.defaultRepeatMode = settings.defaultRepeatMode.index;
     box.defaultShuffle = settings.defaultShuffle;
     box.autoScanEnabled = settings.autoScanEnabled;
@@ -98,7 +97,10 @@ class SettingsBox extends HiveObject {
     box.waveformAnimationSpeed = settings.waveformAnimationSpeed;
     box.primaryColor = settings.primaryColor;
     box.accentColor = settings.accentColor;
-    box.showMediaNotification = settings.showMediaNotification;
+    // Legacy binary fields must still be initialized: the generated adapter
+    // writes them, even though nothing reads them back anymore.
+    box.gaplessPlayback = true;
+    box.showMediaNotification = true;
     box.notificationOngoing = settings.notificationOngoing;
     box.stopOnPause = settings.stopOnPause;
     box.autoplayEnabled = settings.autoplayEnabled;

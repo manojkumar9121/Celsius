@@ -1,11 +1,13 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:celsius/presentation/providers/audio_player_provider.dart';
 
-final sleepTimerProvider = StateNotifierProvider<SleepTimerNotifier, SleepTimerState>((ref) {
-  return SleepTimerNotifier(ref);
-});
+final sleepTimerProvider =
+    StateNotifierProvider<SleepTimerNotifier, SleepTimerState>((ref) {
+      return SleepTimerNotifier(ref);
+    });
 
 class SleepTimerState {
   final bool isActive;
@@ -38,30 +40,27 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   StreamSubscription<PositionDiscontinuity>? _discontinuitySub;
   StreamSubscription<ProcessingState>? _processingSub;
   bool _endOfTrack = false;
+  int _timerGeneration = 0;
 
   SleepTimerNotifier(this.ref) : super(const SleepTimerState());
 
   void startTimer(Duration duration) {
     _clearEndOfTrack();
     cancelTimer();
+    final generation = ++_timerGeneration;
 
-    _timer = Timer(duration, () {
-      if (!mounted) return;
-      _countdownTimer?.cancel();
-      _countdownTimer = null;
-      _timer = null;
-      _pausePlayback();
-      state = const SleepTimerState();
-    });
+    _timer = Timer(duration, () => unawaited(_pauseAndReset(generation)));
 
     _countdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) {
+      if (!mounted || generation != _timerGeneration) {
         _countdownTimer?.cancel();
         _countdownTimer = null;
         return;
       }
       if (state.remaining > Duration.zero) {
-        state = state.copyWith(remaining: state.remaining - const Duration(seconds: 1));
+        state = state.copyWith(
+          remaining: state.remaining - const Duration(seconds: 1),
+        );
       } else {
         _countdownTimer?.cancel();
         _countdownTimer = null;
@@ -79,47 +78,49 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   /// handler is not available yet (nothing to listen to).
   bool startEndOfTrackTimer() {
     cancelTimer();
+    final generation = ++_timerGeneration;
     _endOfTrack = true;
-    final attached = _attachEndOfTrackListeners();
+    final attached = _attachEndOfTrackListeners(generation);
     if (!attached) {
       _endOfTrack = false;
       return false;
     }
-    state = const SleepTimerState(
-      isActive: true,
-      selectedDuration: null,
-    );
+    state = const SleepTimerState(isActive: true, selectedDuration: null);
     return true;
   }
 
-  bool _attachEndOfTrackListeners() {
+  bool _attachEndOfTrackListeners(int generation) {
     final handler = ref.read(audioHandlerProvider);
     if (handler == null) return false;
 
-    _discontinuitySub = handler.player.positionDiscontinuityStream.listen((discontinuity) {
-      if (!_endOfTrack) return;
-      if (discontinuity.reason != PositionDiscontinuityReason.autoAdvance) return;
-      _finishEndOfTrack();
+    _discontinuitySub = handler.player.positionDiscontinuityStream.listen((
+      discontinuity,
+    ) {
+      if (!_endOfTrack || generation != _timerGeneration) return;
+      if (discontinuity.reason != PositionDiscontinuityReason.autoAdvance) {
+        return;
+      }
+      _finishEndOfTrack(generation);
     });
 
-    _processingSub = handler.player.processingStateStream.listen((processingState) {
-      if (!_endOfTrack) return;
-      if (processingState == ProcessingState.completed) {
-        _finishEndOfTrack();
+    _processingSub = handler.player.processingStateStream.listen((state) {
+      if (!_endOfTrack || generation != _timerGeneration) return;
+      if (state == ProcessingState.completed) {
+        _finishEndOfTrack(generation);
       }
     });
     return true;
   }
 
-  void _finishEndOfTrack() {
-    if (!mounted || !_endOfTrack) return;
+  void _finishEndOfTrack(int generation) {
+    if (!mounted || !_endOfTrack || generation != _timerGeneration) return;
     _endOfTrack = false;
     _discontinuitySub?.cancel();
     _processingSub?.cancel();
     _discontinuitySub = null;
     _processingSub = null;
-    _pausePlayback();
-    state = const SleepTimerState();
+    state = const SleepTimerState(isActive: true);
+    unawaited(_pauseAndReset(generation));
   }
 
   void _clearEndOfTrack() {
@@ -131,6 +132,7 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
   }
 
   void cancelTimer() {
+    _timerGeneration++;
     _clearEndOfTrack();
     _timer?.cancel();
     _countdownTimer?.cancel();
@@ -139,11 +141,24 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
     state = const SleepTimerState();
   }
 
-  void _pausePlayback() {
+  Future<void> _pauseAndReset(int generation) async {
+    if (!mounted || generation != _timerGeneration) return;
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
+    _timer = null;
+    if (state.selectedDuration != null && state.remaining != Duration.zero) {
+      state = state.copyWith(remaining: Duration.zero);
+    }
+
+    bool paused;
     try {
-      final playerNotifier = ref.read(audioPlayerProvider.notifier);
-      playerNotifier.pause();
-    } catch (_) {}
+      paused = await ref.read(audioPlayerProvider.notifier).pause();
+    } catch (error) {
+      debugPrint('Sleep timer pause failed: $error');
+      return;
+    }
+    if (!mounted || generation != _timerGeneration) return;
+    if (paused) state = const SleepTimerState();
   }
 
   String get formattedRemaining {
@@ -161,6 +176,7 @@ class SleepTimerNotifier extends StateNotifier<SleepTimerState> {
 
   @override
   void dispose() {
+    _timerGeneration++;
     _clearEndOfTrack();
     _timer?.cancel();
     _timer = null;

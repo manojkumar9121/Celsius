@@ -19,7 +19,9 @@ class PlaylistScreen extends ConsumerWidget {
           ? Center(
               child: Text(
                 'No song playing',
-                style: TextStyle(color: ref.watch(nowPlayingThemeSpecProvider).inkColor),
+                style: TextStyle(
+                  color: ref.watch(nowPlayingThemeSpecProvider).inkColor,
+                ),
               ),
             )
           : _PlaylistList(song: song),
@@ -42,11 +44,27 @@ class _PlaylistList extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.playlist_play, size: 64, color: textColor.withValues(alpha: 0.3)),
+            Icon(
+              Icons.playlist_play,
+              size: 64,
+              color: textColor.withValues(alpha: 0.3),
+            ),
             const SizedBox(height: 16),
-            Text('No playlists yet', style: TextStyle(color: textColor.withValues(alpha: 0.5), fontSize: 16)),
+            Text(
+              'No playlists yet',
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.5),
+                fontSize: 16,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Create a playlist first', style: TextStyle(color: textColor.withValues(alpha: 0.4), fontSize: 14)),
+            Text(
+              'Create a playlist first',
+              style: TextStyle(
+                color: textColor.withValues(alpha: 0.4),
+                fontSize: 14,
+              ),
+            ),
           ],
         ),
       );
@@ -61,7 +79,9 @@ class _PlaylistList extends ConsumerWidget {
         return ListTile(
           leading: Icon(
             Icons.queue_music,
-            color: alreadyAdded ? theme.colorScheme.primary : textColor.withValues(alpha: 0.7),
+            color: alreadyAdded
+                ? theme.colorScheme.primary
+                : textColor.withValues(alpha: 0.7),
             size: 28,
           ),
           title: Text(
@@ -73,21 +93,36 @@ class _PlaylistList extends ConsumerWidget {
           ),
           subtitle: Text(
             '${playlist.songIds.length} songs',
-            style: TextStyle(color: textColor.withValues(alpha: 0.6), fontSize: 13),
+            style: TextStyle(
+              color: textColor.withValues(alpha: 0.6),
+              fontSize: 13,
+            ),
           ),
           trailing: alreadyAdded
               ? const Icon(Icons.check, color: Colors.green)
               : null,
           onTap: alreadyAdded
               ? null
-              : () {
-                  ref.read(playlistProvider.notifier).addSongToPlaylist(playlist.id, song.id);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Added to ${playlist.name}'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
+              : () async {
+                  try {
+                    await ref
+                        .read(playlistProvider.notifier)
+                        .addSongToPlaylist(playlist.id, song.id);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Added to ${playlist.name}'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                  } catch (error) {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Could not add to playlist: $error'),
+                      ),
+                    );
+                  }
                 },
         );
       },

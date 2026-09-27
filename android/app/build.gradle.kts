@@ -15,8 +15,11 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.celsius.celsius"
+        // Application ID kept as the original "celsuis" spelling.
+        // This is the Android identity (data dir / Play listing).
+        // Renaming it to "celsius" orphaned all Hive data, so it stays.
+        // Display name (android:label="Celsius") is what users see.
+        applicationId = "com.celsuis.celsuis"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

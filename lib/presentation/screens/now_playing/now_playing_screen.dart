@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -24,7 +23,8 @@ class NowPlayingScreen extends ConsumerStatefulWidget {
   ConsumerState<NowPlayingScreen> createState() => _NowPlayingScreenState();
 }
 
-class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with TickerProviderStateMixin {
+class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen>
+    with TickerProviderStateMixin {
   final Map<String, Color> _dominantColorCache = {};
   final List<String> _dominantColorOrder = [];
   final Map<String, List<double>> _waveCache = {};
@@ -87,30 +87,22 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
       ),
       child: GestureDetector(
         onVerticalDragEnd: (details) {
-          if (details.primaryVelocity != null && details.primaryVelocity! > 500) {
+          if (details.primaryVelocity != null &&
+              details.primaryVelocity! > 500) {
             Navigator.pop(context);
           }
         },
         child: Scaffold(
           backgroundColor: spec.backgroundColor ?? Colors.black,
           body: Stack(
-              fit: StackFit.expand,
-              children: [
-                NowPlayingBackground(spec: spec, song: song, avgColor: avgColor),
-                SafeArea(
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
+            fit: StackFit.expand,
+            children: [
+              NowPlayingBackground(spec: spec, song: song, avgColor: avgColor),
+              SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
                     final maxH = constraints.maxHeight;
-                    final maxW = constraints.maxWidth;
-                    // Dynamic sizing: art scales with viewport height but never
-                    // overflows narrow screens; gaps scale proportionally so
-                    // short and tall phones distribute space evenly.
-                    final artSize = math.min(
-                      (maxH * 0.32).clamp(180.0, 340.0),
-                      math.max(140.0, maxW - 48.0),
-                    );
-                    final gapSmall = (maxH * 0.008).clamp(4.0, 10.0);
-                    final gapMedium = (maxH * 0.018).clamp(8.0, 20.0);
+                    final artSize = (maxH * 0.35).clamp(180.0, 340.0);
                     return SingleChildScrollView(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(minHeight: maxH),
@@ -118,43 +110,44 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
                           child: Column(
                             children: [
                               _buildTopBar(context, spec),
-                              SizedBox(height: gapSmall),
+                              const SizedBox(height: 8),
                               _buildAlbumArt(song, artSize, playerState),
-                              SizedBox(height: gapMedium),
+                              const SizedBox(height: 20),
                               _buildSongInfo(song, spec, playerState.isPlaying),
-                              SizedBox(height: gapSmall),
+                              const SizedBox(height: 12),
                               _buildActionBar(song, accentColor, spec),
-                              SizedBox(height: gapSmall),
+                              const SizedBox(height: 4),
                               _buildSeekBar(playerState, accentColor, spec),
-                              SizedBox(height: gapSmall),
-                              _buildTransportControls(playerState, accentColor, spec),
-                              SizedBox(height: gapSmall),
+                              const SizedBox(height: 4),
+                              _buildTransportControls(
+                                playerState,
+                                accentColor,
+                                spec,
+                              ),
+                              const SizedBox(height: 12),
                               _buildWaveform(song, spec),
-                              SizedBox(height: gapSmall),
-                              // Pins the 3 pills (queue/playlist/lyrics) to the
-                              // bottom on tall screens; collapses to zero when
-                              // content overflows and the view scrolls.
-                              const Spacer(),
+                              const SizedBox(height: 8),
                               _buildBottomNavigation(spec),
                             ],
                           ),
                         ),
                       ),
                     );
-                    },
-                  ),
+                  },
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
+      ),
     );
   }
 
   Widget _buildWaveform(SongEntity song, NowPlayingThemeSpec spec) {
     final settings = ref.watch(settingsProvider);
 
-    final hasArt = song.coverArtPath != null &&
+    final hasArt =
+        song.coverArtPath != null &&
         song.coverArtPath!.isNotEmpty &&
         File(song.coverArtPath!).existsSync();
 
@@ -217,7 +210,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  void _preloadUpcomingWaveforms(AudioPlayerState playerState, SongEntity song) {
+  void _preloadUpcomingWaveforms(
+    AudioPlayerState playerState,
+    SongEntity song,
+  ) {
     final index = playerState.queue.indexWhere((s) => s.id == song.id);
     if (index < 0) return;
     final upper = (index + 3).clamp(0, playerState.queue.length);
@@ -244,7 +240,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     }
 
     try {
-      final data = await WaveformExtractorService.instance.extractWaveform(path);
+      final data = await WaveformExtractorService.instance.extractWaveform(
+        path,
+      );
       if (!mounted) return;
       setState(() {
         _waveCache[id] = data;
@@ -297,11 +295,19 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                icon: Icon(Icons.queue_music, color: iconColor.withValues(alpha: 0.7), size: 20),
+                icon: Icon(
+                  Icons.queue_music,
+                  color: iconColor.withValues(alpha: 0.7),
+                  size: 20,
+                ),
                 onPressed: () => context.push('/queue'),
               ),
               IconButton(
-                icon: Icon(Icons.timer_outlined, color: iconColor.withValues(alpha: 0.7), size: 20),
+                icon: Icon(
+                  Icons.timer_outlined,
+                  color: iconColor.withValues(alpha: 0.7),
+                  size: 20,
+                ),
                 onPressed: _showSleepTimerDialog,
               ),
             ],
@@ -311,7 +317,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildAlbumArt(SongEntity song, double artSize, AudioPlayerState playerState) {
+  Widget _buildAlbumArt(
+    SongEntity song,
+    double artSize,
+    AudioPlayerState playerState,
+  ) {
     final queueIndex = playerState.queue.indexWhere((s) => s.id == song.id);
 
     return GestureDetector(
@@ -341,7 +351,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildSongInfo(SongEntity song, NowPlayingThemeSpec spec, bool isPlaying) {
+  Widget _buildSongInfo(
+    SongEntity song,
+    NowPlayingThemeSpec spec,
+    bool isPlaying,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Row(
@@ -376,8 +390,13 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildActionBar(SongEntity song, Color accentColor, NowPlayingThemeSpec spec) {
-    final heartColor = spec.pillHeartColor ??
+  Widget _buildActionBar(
+    SongEntity song,
+    Color accentColor,
+    NowPlayingThemeSpec spec,
+  ) {
+    final heartColor =
+        spec.pillHeartColor ??
         (song.isFavorite ? accentColor : spec.pillTextColor);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -391,9 +410,19 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             spec: spec,
             onTap: () async {
               await HapticFeedback.lightImpact();
-              final newFav = !song.isFavorite;
-              ref.read(libraryProvider.notifier).toggleFavorite(song.id);
-              ref.read(audioPlayerProvider.notifier).updateCurrentSongFavorite(newFav);
+              try {
+                await ref
+                    .read(libraryProvider.notifier)
+                    .toggleFavorite(song.id);
+              } catch (error) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not update favorite: $error'),
+                    ),
+                  );
+                }
+              }
             },
           ),
           const SizedBox(width: 12),
@@ -447,8 +476,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
               label,
               style: (spec.pillTextStyle ?? const TextStyle()).merge(
                 TextStyle(
-                  color: (spec.pillHeartColor == null ? color : spec.pillTextColor)
-                      .withValues(alpha: 0.9),
+                  color:
+                      (spec.pillHeartColor == null ? color : spec.pillTextColor)
+                          .withValues(alpha: 0.9),
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
                 ),
@@ -460,11 +490,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildSeekBar(AudioPlayerState playerState, Color accentColor, NowPlayingThemeSpec spec) {
+  Widget _buildSeekBar(
+    AudioPlayerState playerState,
+    Color accentColor,
+    NowPlayingThemeSpec spec,
+  ) {
     final total = playerState.totalDuration;
     final position = playerState.position;
     final preview = _seekDragValue;
-    final progress = preview ??
+    final progress =
+        preview ??
         (total.inMilliseconds > 0
             ? position.inMilliseconds / total.inMilliseconds
             : 0.0);
@@ -476,11 +511,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
           SizedBox(
             height: 32,
             child: SliderTheme(
-              data: spec.sliderTheme() ??
+              data:
+                  spec.sliderTheme() ??
                   SliderThemeData(
                     trackHeight: 2,
-                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 0),
-                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 0),
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 0,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 0,
+                    ),
                     activeTrackColor: Colors.white,
                     inactiveTrackColor: Colors.white.withValues(alpha: 0.15),
                     thumbColor: Colors.white,
@@ -490,7 +530,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
                 value: progress.clamp(0.0, 1.0),
                 onChanged: (value) => setState(() => _seekDragValue = value),
                 onChangeEnd: (value) {
-                  final pos = Duration(milliseconds: (value * total.inMilliseconds).round());
+                  final pos = Duration(
+                    milliseconds: (value * total.inMilliseconds).round(),
+                  );
                   ref.read(audioPlayerProvider.notifier).seek(pos);
                   setState(() => _seekDragValue = null);
                 },
@@ -512,7 +554,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _buildTransportControls(AudioPlayerState playerState, Color accentColor, NowPlayingThemeSpec spec) {
+  Widget _buildTransportControls(
+    AudioPlayerState playerState,
+    Color accentColor,
+    NowPlayingThemeSpec spec,
+  ) {
     final iconColor = spec.transportColor;
     final activeColor = spec.transportActiveColor ?? accentColor;
     return Padding(
@@ -521,10 +567,18 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           IconButton(
-            icon: Icon(Icons.shuffle_rounded, color: playerState.isShuffled ? activeColor : iconColor.withValues(alpha: 0.6), size: 20),
+            icon: Icon(
+              Icons.shuffle_rounded,
+              color: playerState.isShuffled
+                  ? activeColor
+                  : iconColor.withValues(alpha: 0.6),
+              size: 20,
+            ),
             onPressed: () async {
               await HapticFeedback.lightImpact();
-              ref.read(audioPlayerProvider.notifier).setShuffle(!playerState.isShuffled);
+              ref
+                  .read(audioPlayerProvider.notifier)
+                  .setShuffle(!playerState.isShuffled);
             },
           ),
           const SizedBox(width: 8),
@@ -540,19 +594,22 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             animation: _playBounceController,
             builder: (context, child) {
               final scale = _showingPlayBounce
-                  ? 1.0 + 0.1 * (1.0 - _playBounceController.value) * _playBounceController.value * 4
+                  ? 1.0 +
+                        0.1 *
+                            (1.0 - _playBounceController.value) *
+                            _playBounceController.value *
+                            4
                   : 1.0;
-              return Transform.scale(
-                scale: scale,
-                child: child!,
-              );
+              return Transform.scale(scale: scale, child: child!);
             },
             child: Container(
               width: spec.playSize,
               height: spec.playSize,
               decoration: BoxDecoration(
                 color: spec.playBackgroundColor,
-                shape: spec.playRadius == null ? BoxShape.circle : BoxShape.rectangle,
+                shape: spec.playRadius == null
+                    ? BoxShape.circle
+                    : BoxShape.rectangle,
                 borderRadius: spec.playRadius == null
                     ? null
                     : BorderRadius.circular(spec.playRadius!),
@@ -560,7 +617,9 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
               ),
               child: IconButton(
                 icon: Icon(
-                  playerState.isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                  playerState.isPlaying
+                      ? Icons.pause_rounded
+                      : Icons.play_arrow_rounded,
                   color: spec.playForegroundColor,
                   size: spec.playIconSize,
                 ),
@@ -605,11 +664,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
       return _buildLcdBar(spec);
     }
     return Padding(
-      // SafeArea already applies the device bottom inset (gesture bar vs
-      // 3-button nav), so keep only a small fixed margin here. A large fixed
-      // value looked fine on gesture-nav phones but left a visible gap on
-      // phones with a taller system nav bar.
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
       child: Row(
         children: [
           Expanded(
@@ -646,7 +701,7 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
   Widget _buildLcdBar(NowPlayingThemeSpec spec) {
     final color = spec.navTextColor;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 20),
       child: Container(
         decoration: BoxDecoration(
           border: Border(
@@ -656,11 +711,38 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
         ),
         child: Row(
           children: [
-            _LcdNavTab(label: 'LYRICS', index: 0, active: _activeNavTab == 0, color: color, onTap: () { setState(() => _activeNavTab = 0); context.push('/lyrics'); }),
+            _LcdNavTab(
+              label: 'LYRICS',
+              index: 0,
+              active: _activeNavTab == 0,
+              color: color,
+              onTap: () {
+                setState(() => _activeNavTab = 0);
+                context.push('/lyrics');
+              },
+            ),
             _LcdNavDot(color: spec.navBorderColor),
-            _LcdNavTab(label: 'QUEUE', index: 1, active: _activeNavTab == 1, color: color, onTap: () { setState(() => _activeNavTab = 1); context.push('/queue'); }),
+            _LcdNavTab(
+              label: 'QUEUE',
+              index: 1,
+              active: _activeNavTab == 1,
+              color: color,
+              onTap: () {
+                setState(() => _activeNavTab = 1);
+                context.push('/queue');
+              },
+            ),
             _LcdNavDot(color: spec.navBorderColor),
-            _LcdNavTab(label: 'LIST', index: 2, active: _activeNavTab == 2, color: color, onTap: () { setState(() => _activeNavTab = 2); context.push('/playlist'); }),
+            _LcdNavTab(
+              label: 'LIST',
+              index: 2,
+              active: _activeNavTab == 2,
+              color: color,
+              onTap: () {
+                setState(() => _activeNavTab = 2);
+                context.push('/playlist');
+              },
+            ),
           ],
         ),
       ),
@@ -696,7 +778,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     return _avgColor;
   }
 
-  Future<void> _computeDominantColor(SongEntity song, Color themePrimary) async {
+  Future<void> _computeDominantColor(
+    SongEntity song,
+    Color themePrimary,
+  ) async {
     if (song.coverArtPath == null || !File(song.coverArtPath!).existsSync()) {
       return;
     }
@@ -704,16 +789,21 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
       final bytes = await File(song.coverArtPath!).readAsBytes();
       final codec = await ui.instantiateImageCodec(
         bytes,
-        targetWidth: 32,
-        targetHeight: 32,
+        targetWidth: 64,
+        targetHeight: 64,
       );
       final frame = await codec.getNextFrame();
-      final data = await frame.image.toByteData(format: ui.ImageByteFormat.rawRgba);
+      final data = await frame.image.toByteData(
+        format: ui.ImageByteFormat.rawRgba,
+      );
       codec.dispose();
       frame.image.dispose();
       if (data == null) return;
 
-      final result = dominantColorFromRgba(data.buffer.asUint8List(), themePrimary);
+      final result = dominantColorFromRgba(
+        data.buffer.asUint8List(),
+        themePrimary,
+      );
 
       if (_dominantColorCache.containsKey(song.id)) {
         _dominantColorOrder.remove(song.id);
@@ -754,7 +844,10 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             children: [
               Text(
                 ref.read(sleepTimerProvider.notifier).formattedRemaining,
-                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 8),
               Text(
@@ -801,7 +894,11 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
     );
   }
 
-  Widget _sleepTimerOption(BuildContext context, String label, Duration? duration) {
+  Widget _sleepTimerOption(
+    BuildContext context,
+    String label,
+    Duration? duration,
+  ) {
     return ListTile(
       title: Text(label),
       leading: Icon(
@@ -819,12 +916,16 @@ class _NowPlayingScreenState extends ConsumerState<NowPlayingScreen> with Ticker
             ),
           );
         } else {
-          final armed = ref.read(sleepTimerProvider.notifier).startEndOfTrackTimer();
+          final armed = ref
+              .read(sleepTimerProvider.notifier)
+              .startEndOfTrackTimer();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(armed
-                  ? 'Sleep timer set for end of track'
-                  : 'Player not ready — try again in a moment'),
+              content: Text(
+                armed
+                    ? 'Sleep timer set for end of track'
+                    : 'Player not ready — try again in a moment',
+              ),
               duration: const Duration(seconds: 2),
             ),
           );

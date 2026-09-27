@@ -8,7 +8,7 @@
 PRODUCT_NAME = celsius
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.celsius.celsius
+PRODUCT_BUNDLE_IDENTIFIER = com.celsuis.celsuis
 
 // The copyright displayed in application information
 PRODUCT_COPYRIGHT = Copyright © 2026 com.celsius. All rights reserved.

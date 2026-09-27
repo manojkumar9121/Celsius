@@ -7,44 +7,73 @@ import 'package:celsius/domain/entities/song_entity.dart';
 import 'package:celsius/domain/entities/app_settings.dart';
 import 'package:celsius/services/background_audio_service.dart';
 import 'package:celsius/services/widget_service.dart';
-import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/presentation/providers/settings_provider.dart';
 
 final audioHandlerProvider = StateProvider<AudioPlayerHandler?>((ref) => null);
 
+enum QueueAddResult { added, alreadyQueued, playerUnavailable }
+
 final widgetServiceProvider = Provider<WidgetService>((ref) => WidgetService());
 
-final audioPlayerStateProvider = StateNotifierProvider<AudioPlayerNotifier, AudioPlayerState>((ref) {
-  final notifier = AudioPlayerNotifier(widgetService: ref.watch(widgetServiceProvider));
-  ref.listen(audioHandlerProvider, (_, handler) => notifier.setHandler(handler));
-  return notifier;
-});
+final audioPlayerStateProvider =
+    StateNotifierProvider<AudioPlayerNotifier, AudioPlayerState>((ref) {
+      final notifier = AudioPlayerNotifier(
+        widgetService: ref.watch(widgetServiceProvider),
+        initialSettings: ref.read(settingsProvider),
+      );
+      ref.listen(
+        audioHandlerProvider,
+        (_, handler) => notifier.setHandler(handler),
+        fireImmediately: true,
+      );
+      ref.listen<AppSettings>(settingsProvider, (_, settings) {
+        notifier.applyRuntimeSettings(settings);
+      });
+      return notifier;
+    });
 
 final audioPlayerProvider = audioPlayerStateProvider;
 
-class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBindingObserver {
+class AudioPlayerNotifier extends StateNotifier<AudioPlayerState>
+    with WidgetsBindingObserver {
   AudioPlayerHandler? _handler;
   final WidgetService _widgetService;
+  AppSettings _runtimeSettings;
   StreamSubscription<Duration>? _positionSub;
   StreamSubscription<PlayerState>? _playerStateSub;
   StreamSubscription<MediaItem?>? _mediaItemSub;
   bool _widgetCallbacksSet = false;
-  /// Song/queue requested while the audio handler was still initializing.
-  /// Applied as soon as the handler becomes available.
+
+  /// Song/queue currently being installed, either because the handler is
+  /// initializing or because its FIFO is still loading the requested source.
   SongEntity? _pendingSong;
   List<SongEntity>? _pendingQueue;
+
   /// Generation counter for the UI queue order. Bumped on every local queue
   /// mutation so stale async completions (e.g. a slow reorder overtaken by a
   /// newer drag or a fresh playSong) never overwrite newer state.
   int _queueVersion = 0;
 
-  AudioPlayerNotifier({WidgetService? widgetService})
-      : _widgetService = widgetService ?? WidgetService(),
-        super(const AudioPlayerState()) {
+  AudioPlayerNotifier({
+    WidgetService? widgetService,
+    AppSettings? initialSettings,
+  }) : _widgetService = widgetService ?? WidgetService(),
+       _runtimeSettings = initialSettings ?? const AppSettings(),
+       super(const AudioPlayerState()) {
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  /// Applies a settings snapshot only after SettingsNotifier has committed it
+  /// to Hive. This keeps pause behavior and handler configuration independent
+  /// of the timing of the settings write queue.
+  void applyRuntimeSettings(AppSettings settings) {
+    _runtimeSettings = settings;
+    _handler?.updateRuntimeSettings(settings);
   }
 
   void setHandler(AudioPlayerHandler? handler) {
     if (identical(handler, _handler)) return;
+    _queueVersion++;
     _handler = handler;
 
     _positionSub?.cancel();
@@ -56,6 +85,8 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
 
     if (handler == null) return;
 
+    handler.updateRuntimeSettings(_runtimeSettings);
+
     if (!_widgetCallbacksSet) {
       _widgetCallbacksSet = true;
       _widgetService.onPrevious = () => skipToPrevious();
@@ -65,6 +96,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     }
 
     _positionSub = handler.player.positionStream.listen((pos) {
+      if (!mounted || !identical(_handler, handler)) return;
       try {
         state = state.copyWith(position: pos);
       } catch (e) {
@@ -72,25 +104,47 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
       }
     }, onError: (e) => debugPrint('Position stream error: $e'));
     _playerStateSub = handler.player.playerStateStream.listen((ps) {
+      if (!mounted || !identical(_handler, handler)) return;
       try {
-        final isPlaying = ps.playing && ps.processingState != ProcessingState.completed;
+        final isPlaying =
+            ps.playing && ps.processingState != ProcessingState.completed;
         if (isPlaying != state.isPlaying) {
           state = state.copyWith(isPlaying: isPlaying);
         }
+        _widgetService.onPlayStateChanged(isPlaying);
       } catch (e) {
         debugPrint('Player state update error: $e');
       }
     }, onError: (e) => debugPrint('Player state stream error: $e'));
     _mediaItemSub = handler.mediaItem.listen((item) {
-      if (item == null) return;
-      final song = handler.songs.where((s) => s.id == item.id).firstOrNull;
+      if (!mounted || !identical(_handler, handler)) return;
+      if (item == null) {
+        if (handler.songs.isEmpty && mounted) {
+          state = state.copyWith(
+            clearCurrentSong: true,
+            queue: const [],
+            position: Duration.zero,
+            totalDuration: Duration.zero,
+            isPlaying: false,
+          );
+          _widgetService.onSongCleared();
+        }
+        return;
+      }
+      final current = handler.currentSong;
+      final song = current?.id == item.id
+          ? current
+          : handler.songs.where((s) => s.id == item.id).firstOrNull;
       if (song == null) return;
       try {
         state = state.copyWith(
           currentSong: song,
           queue: List.of(handler.songs),
-          totalDuration: handler.player.duration ?? Duration(milliseconds: song.durationMs),
+          totalDuration:
+              handler.player.duration ??
+              Duration(milliseconds: song.durationMs),
         );
+        _widgetService.onSongChanged(song, handler.isPlaying);
       } catch (e) {
         debugPrint('Media item update error: $e');
       }
@@ -109,7 +163,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   }
 
   void _applyDefaultPlaybackSettings(AudioPlayerHandler handler) {
-    final settings = HiveStorage.getSettings();
+    final settings = _runtimeSettings;
     if (settings.defaultShuffle) {
       unawaited(handler.setShuffle(true));
       state = state.copyWith(isShuffled: true);
@@ -129,6 +183,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     final resolvedQueue = queue ?? [song];
 
     _queueVersion++;
+    final version = _queueVersion;
     state = state.copyWith(
       currentSong: song,
       isPlaying: false,
@@ -144,27 +199,37 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
       _pendingQueue = resolvedQueue;
       return;
     }
-    _pendingSong = null;
-    _pendingQueue = null;
+    _pendingSong = song;
+    _pendingQueue = resolvedQueue;
+    if (!mounted || !identical(_handler, handler)) return;
     try {
       await handler.setQueue(resolvedQueue, initialSong: song);
-    } catch (e) {
-      debugPrint('Failed to set queue: $e');
-      state = state.copyWith(isPlaying: false);
+    } catch (error) {
+      debugPrint('Failed to set queue: $error');
+      if (mounted && version == _queueVersion && identical(_handler, handler)) {
+        _pendingSong = null;
+        _pendingQueue = null;
+        _resyncStateFromHandler();
+      }
       return;
     }
 
+    if (!mounted || version != _queueVersion || !identical(_handler, handler)) {
+      return;
+    }
+    _pendingSong = null;
+    _pendingQueue = null;
+    final shouldPlay = handler.wantsPlayback;
     try {
       state = state.copyWith(
-        isPlaying: true,
+        isPlaying: shouldPlay,
         totalDuration: handler.player.duration ?? state.totalDuration,
       );
     } catch (e) {
       debugPrint('Play state update error: $e');
     }
 
-    _widgetService.trackSong(song);
-    _widgetService.onSongChanged(song, true);
+    _widgetService.onSongChanged(song, shouldPlay);
     // Play count is recorded by the audio handler when the song becomes
     // current (see background_audio_service.dart) — one increment per play,
     // regardless of how the song was started.
@@ -172,77 +237,314 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
 
   Future<void> togglePlayPause() async {
     final handler = _handler;
-    if (handler == null) return;
-    if (handler.isPlaying) {
-      if (HiveStorage.getSettings().stopOnPause) {
-        await handler.stop();
+    if (handler == null) {
+      _cancelPendingPlayback();
+      return;
+    }
+    try {
+      if (handler.isPlaying) {
+        if (_runtimeSettings.stopOnPause) {
+          await handler.stop();
+        } else {
+          await handler.pause();
+        }
+        if (!mounted || !identical(_handler, handler)) return;
+        state = state.copyWith(isPlaying: false);
+        _widgetService.onPlayStateChanged(false);
       } else {
-        await handler.pause();
+        await handler.play();
+        if (!mounted || !identical(_handler, handler)) return;
+        state = state.copyWith(isPlaying: true);
+        _widgetService.onPlayStateChanged(true);
       }
-      state = state.copyWith(isPlaying: false);
-      _widgetService.onPlayStateChanged(false);
-    } else {
-      await handler.play();
-      state = state.copyWith(isPlaying: true);
-      _widgetService.onPlayStateChanged(true);
+    } catch (error) {
+      debugPrint('Play/pause failed: $error');
+      if (mounted && identical(_handler, handler)) _resyncStateFromHandler();
     }
   }
 
   Future<void> play() async {
     final handler = _handler;
     if (handler == null) return;
-    await handler.play();
-    state = state.copyWith(isPlaying: true);
-    _widgetService.onPlayStateChanged(true);
+    try {
+      await handler.play();
+      if (!mounted || !identical(_handler, handler)) return;
+      state = state.copyWith(isPlaying: true);
+      _widgetService.onPlayStateChanged(true);
+    } catch (error) {
+      debugPrint('Play failed: $error');
+      if (mounted && identical(_handler, handler)) _resyncStateFromHandler();
+    }
   }
 
-  void pause() {
+  Future<bool> pause() async {
     final handler = _handler;
-    if (handler == null) return;
-    if (HiveStorage.getSettings().stopOnPause) {
-      handler.stop();
-    } else {
-      handler.pause();
+    if (handler == null) {
+      _cancelPendingPlayback();
+      return false;
     }
+    try {
+      if (_runtimeSettings.stopOnPause) {
+        await handler.stop();
+      } else {
+        await handler.pause();
+      }
+    } catch (error) {
+      debugPrint('Pause failed: $error');
+      if (mounted && identical(_handler, handler)) _resyncStateFromHandler();
+      return false;
+    }
+    if (!mounted || !identical(_handler, handler)) return false;
     state = state.copyWith(isPlaying: false);
     _widgetService.onPlayStateChanged(false);
+    return true;
+  }
+
+  void _cancelPendingPlayback() {
+    if (_pendingSong == null && _pendingQueue == null) return;
+    _queueVersion++;
+    _pendingSong = null;
+    _pendingQueue = null;
+    state = state.copyWith(
+      clearCurrentSong: true,
+      queue: const [],
+      isPlaying: false,
+      position: Duration.zero,
+      totalDuration: Duration.zero,
+    );
+    _widgetService.onSongCleared();
   }
 
   Future<void> skipToNext() async {
     final handler = _handler;
     if (handler == null) return;
-    await handler.skipToNext();
+    try {
+      await handler.skipToNext();
+    } catch (error) {
+      debugPrint('Skip next failed: $error');
+      if (mounted && identical(_handler, handler)) _resyncStateFromHandler();
+    }
   }
 
   Future<void> skipToPrevious() async {
     final handler = _handler;
     if (handler == null) return;
-    await handler.skipToPrevious();
+    try {
+      await handler.skipToPrevious();
+    } catch (error) {
+      debugPrint('Skip previous failed: $error');
+      if (mounted && identical(_handler, handler)) _resyncStateFromHandler();
+    }
   }
 
   Future<void> skipToQueueItem(int index) async {
-    if (index < 0 || index >= state.queue.length) return;
     final handler = _handler;
     if (handler == null) return;
-    await handler.skipToQueueItem(index);
+    try {
+      await handler.skipToQueueItem(index);
+    } catch (error) {
+      debugPrint('Queue selection failed: $error');
+      if (mounted && identical(_handler, handler)) _resyncStateFromHandler();
+    }
   }
 
-  /// Adds [song] to the current playback queue without interrupting
-  /// playback. When [playNext] is true the song is inserted right after the
-  /// currently playing song.
-  Future<void> addToQueue(SongEntity song, {bool playNext = false}) async {
+  /// Adds [song] without exposing an ambiguous boolean for startup and
+  /// duplicate cases.
+  Future<QueueAddResult> addToQueue(
+    SongEntity song, {
+    bool playNext = false,
+  }) async {
     final handler = _handler;
-    if (handler == null) return;
-    await handler.addToQueue([song], playNext: playNext);
+    if (handler == null) return QueueAddResult.playerUnavailable;
     _queueVersion++;
-    state = state.copyWith(queue: List.of(handler.songs));
+    final version = _queueVersion;
+    if (_pendingSong != null) {
+      final desired = List<SongEntity>.of(_pendingQueue ?? state.queue);
+      if (!desired.any((queued) => queued.id == song.id)) {
+        final currentId = _pendingSong!.id;
+        final currentIndex = desired.indexWhere(
+          (queued) => queued.id == currentId,
+        );
+        final insertAt = playNext
+            ? (currentIndex >= 0 ? currentIndex + 1 : desired.length)
+            : desired.length;
+        desired.insert(insertAt, song.copyWith());
+        _pendingQueue = desired;
+        state = state.copyWith(queue: List.of(desired));
+      }
+    }
+
+    if (!mounted || !identical(_handler, handler)) {
+      return QueueAddResult.playerUnavailable;
+    }
+    try {
+      final added = await handler.addToQueue([song], playNext: playNext);
+      if (!added) {
+        if (mounted && version == _queueVersion) {
+          _pendingSong = null;
+          _pendingQueue = null;
+          _resyncStateFromHandler();
+        }
+        return QueueAddResult.alreadyQueued;
+      }
+      if (mounted && version == _queueVersion) {
+        _pendingSong = null;
+        _pendingQueue = null;
+        _resyncStateFromHandler();
+      }
+      return QueueAddResult.added;
+    } catch (error) {
+      debugPrint('Queue insertion failed: $error');
+      if (mounted && version == _queueVersion) {
+        _pendingSong = null;
+        _pendingQueue = null;
+        _resyncStateFromHandler();
+      }
+      rethrow;
+    }
   }
 
-  void seek(Duration position) {
+  /// Drops deleted songs from both active and pending playback state. When
+  /// the current song is deleted, playback moves directly to the next
+  /// surviving song while preserving whether playback was intended to run.
+  Future<void> handleSongsRemoved(List<String> ids) {
+    if (ids.isEmpty || !mounted) return Future<void>.value();
+    return _handleSongsRemovedNow(ids);
+  }
+
+  Future<void> _handleSongsRemovedNow(List<String> ids) async {
+    if (!mounted) return;
+    final doomed = ids.toSet();
+    final handler = _handler;
+    final referenceQueue = _pendingQueue ?? handler?.songs ?? state.queue;
+    final referenceCurrent = _pendingSong ?? state.currentSong;
+    final affectsQueue = referenceQueue.any((song) => doomed.contains(song.id));
+    final affectsCurrent =
+        referenceCurrent != null && doomed.contains(referenceCurrent.id);
+    if (!affectsQueue && !affectsCurrent) return;
+
+    _queueVersion++;
+    final version = _queueVersion;
+    final remaining = referenceQueue
+        .where((song) => !doomed.contains(song.id))
+        .toList();
+    final currentRemoved =
+        state.currentSong != null && doomed.contains(state.currentSong!.id);
+    final wasPlaying = handler?.wantsPlayback ?? state.isPlaying;
+
+    if (_pendingQueue != null) {
+      _pendingQueue = remaining;
+    }
+    if (_pendingSong != null && doomed.contains(_pendingSong!.id)) {
+      _pendingSong = _nextSurvivingSong(
+        referenceQueue,
+        _pendingSong!.id,
+        doomed,
+      );
+    }
+
+    if (!currentRemoved) {
+      state = state.copyWith(queue: remaining);
+      if (handler == null) return;
+      try {
+        await handler.removeQueueItems(ids);
+      } catch (error) {
+        debugPrint('Queue prune failed: $error');
+        if (mounted && version == _queueVersion) {
+          _resyncStateFromHandler();
+        }
+        rethrow;
+      }
+      if (mounted && version == _queueVersion) {
+        _pendingSong = null;
+        _pendingQueue = null;
+        _resyncQueueFromHandler();
+      }
+      return;
+    }
+
+    final next = _nextSurvivingSong(state.queue, state.currentSong!.id, doomed);
+    state = state.copyWith(
+      queue: remaining,
+      currentSong: next,
+      clearCurrentSong: next == null,
+      isPlaying: next != null && wasPlaying,
+      position: Duration.zero,
+      totalDuration: next == null
+          ? Duration.zero
+          : Duration(milliseconds: next.durationMs),
+    );
+    final shouldPlay = next != null && wasPlaying;
+    if (next != null) {
+      _widgetService.onSongChanged(next, shouldPlay);
+    } else {
+      _widgetService.onSongCleared();
+    }
+
+    if (handler == null) {
+      if (next != null) {
+        _pendingSong = next;
+        _pendingQueue = remaining;
+      }
+      return;
+    }
+    try {
+      if (next != null) {
+        await handler.setQueue(
+          remaining,
+          initialSong: next,
+          playWhenReady: wasPlaying,
+        );
+      } else {
+        await handler.setQueue([], playWhenReady: false);
+      }
+    } catch (error) {
+      debugPrint('Queue rebuild after song removal failed: $error');
+      if (mounted && version == _queueVersion) {
+        _resyncStateFromHandler();
+      }
+      rethrow;
+    }
+    if (mounted && version == _queueVersion) {
+      _pendingSong = null;
+      _pendingQueue = null;
+      _resyncQueueFromHandler();
+    }
+  }
+
+  SongEntity? _nextSurvivingSong(
+    List<SongEntity> queue,
+    String currentId,
+    Set<String> doomed,
+  ) {
+    SongEntity? fallback;
+    var seenCurrent = false;
+    for (final song in queue) {
+      if (song.id == currentId) {
+        seenCurrent = true;
+        continue;
+      }
+      if (doomed.contains(song.id)) continue;
+      if (seenCurrent) return song;
+      fallback ??= song;
+    }
+    return fallback;
+  }
+
+  Future<void> seek(Duration position) async {
     final handler = _handler;
     if (handler == null) return;
-    handler.seek(position);
-    state = state.copyWith(position: position);
+    try {
+      await handler.seek(position);
+      if (mounted && identical(_handler, handler)) {
+        state = state.copyWith(position: position);
+      }
+    } catch (error) {
+      debugPrint('Seek failed: $error');
+      if (mounted && identical(_handler, handler)) {
+        _resyncStateFromHandler();
+      }
+    }
   }
 
   void setVolume(double volume) {
@@ -255,14 +557,27 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
   Future<void> setShuffle(bool enabled) async {
     final handler = _handler;
     if (handler == null) return;
-    await handler.setShuffle(enabled);
+    _queueVersion++;
+    final version = _queueVersion;
+    if (!mounted || !identical(_handler, handler)) return;
+    try {
+      await handler.setShuffle(enabled);
+    } catch (error) {
+      debugPrint('Queue shuffle failed: $error');
+      if (mounted && version == _queueVersion) {
+        _pendingSong = null;
+        _pendingQueue = null;
+        _resyncStateFromHandler();
+      }
+      rethrow;
+    }
+    if (!mounted || version != _queueVersion) return;
+    _pendingSong = null;
+    _pendingQueue = null;
     // Re-sync the UI queue with the (possibly reordered) handler queue so
     // skipToQueueItem/reorderQueue indices always agree.
-    _queueVersion++;
-    state = state.copyWith(
-      isShuffled: enabled,
-      queue: List.of(handler.songs),
-    );
+    _resyncStateFromHandler();
+    state = state.copyWith(isShuffled: enabled);
   }
 
   void setRepeatMode(AppSettingsRepeatMode mode) {
@@ -284,11 +599,27 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     state = state.copyWith(repeatMode: mode);
   }
 
-  void updateCurrentSongFavorite(bool isFavorite) {
-    if (state.currentSong != null) {
-      state = state.copyWith(
-        currentSong: state.currentSong!.copyWith(isFavorite: isFavorite),
-      );
+  void applyCommittedSong(SongEntity song) {
+    if (!mounted) return;
+    final current = state.currentSong;
+    final isCurrent = current?.id == song.id;
+    state = state.copyWith(
+      currentSong: isCurrent ? song.copyWith() : null,
+      queue: [
+        for (final queued in state.queue)
+          if (queued.id == song.id) song.copyWith() else queued,
+      ],
+    );
+    if (_pendingSong?.id == song.id) _pendingSong = song.copyWith();
+    if (_pendingQueue != null) {
+      _pendingQueue = [
+        for (final queued in _pendingQueue!)
+          if (queued.id == song.id) song.copyWith() else queued,
+      ];
+    }
+    _handler?.applyCommittedSong(song);
+    if (isCurrent) {
+      _widgetService.onSongChanged(song, state.isPlaying);
     }
   }
 
@@ -310,6 +641,7 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     _queueVersion++;
     final version = _queueVersion;
     state = state.copyWith(queue: songs);
+    if (_pendingSong != null) _pendingQueue = List.of(songs);
 
     final handler = _handler;
     if (handler == null) return;
@@ -318,20 +650,26 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     // source). On completion, resync from it instead of replaying the
     // indices — replaying would double-apply the move whenever the
     // handler's mediaItem emission already synced state.queue first.
-    unawaited(handler.reorderQueue(oldIndex, newIndex).then((_) {
-      if (version != _queueVersion) return;
-      _resyncQueueFromHandler();
-    }).catchError((Object e) {
-      debugPrint('Queue reorder failed: $e');
-      if (version != _queueVersion) return;
-      // Fall back to the handler's order so UI and playback never diverge.
-      _resyncQueueFromHandler();
-    }));
+    unawaited(() async {
+      if (!mounted || !identical(_handler, handler)) return;
+      try {
+        await handler.reorderQueue(oldIndex, newIndex);
+      } catch (error) {
+        debugPrint('Queue reorder failed: $error');
+        if (version == _queueVersion) _resyncStateFromHandler();
+        return;
+      }
+      if (version != _queueVersion || !identical(_handler, handler)) return;
+      _pendingSong = null;
+      _pendingQueue = null;
+      _resyncStateFromHandler();
+    }());
   }
 
   /// Copies the handler's authoritative queue order into UI state when it
   /// has actually diverged (avoids needless rebuilds on every call).
   void _resyncQueueFromHandler() {
+    if (!mounted) return;
     final handler = _handler;
     if (handler == null) return;
     final handlerSongs = handler.songs;
@@ -356,23 +694,36 @@ class AudioPlayerNotifier extends StateNotifier<AudioPlayerState> with WidgetsBi
     }
   }
 
-  Future<void> _syncStateFromHandler() async {
+  void _resyncStateFromHandler() {
+    if (!mounted) return;
     final handler = _handler;
     if (handler == null) return;
     try {
-      final currentPos = handler.player.position;
-      final isPlaying = handler.player.playing;
-      final totalDur = handler.player.duration ?? state.totalDuration;
-      final song = handler.currentSong ?? state.currentSong;
+      final song = handler.currentSong;
       state = state.copyWith(
-        position: currentPos,
-        isPlaying: isPlaying,
-        totalDuration: totalDur,
         currentSong: song,
+        clearCurrentSong: song == null,
+        queue: List.of(handler.songs),
+        isPlaying: handler.isPlaying,
+        position: handler.player.position,
+        totalDuration:
+            handler.player.duration ??
+            (song == null
+                ? Duration.zero
+                : Duration(milliseconds: song.durationMs)),
       );
-    } catch (e) {
-      debugPrint('Lifecycle sync error: $e');
+      if (song == null) {
+        _widgetService.onSongCleared();
+      } else {
+        _widgetService.onSongChanged(song, handler.isPlaying);
+      }
+    } catch (error) {
+      debugPrint('Audio state resync error: $error');
     }
+  }
+
+  Future<void> _syncStateFromHandler() async {
+    _resyncStateFromHandler();
   }
 
   @override
@@ -408,6 +759,7 @@ class AudioPlayerState {
 
   AudioPlayerState copyWith({
     SongEntity? currentSong,
+    bool clearCurrentSong = false,
     bool? isPlaying,
     Duration? position,
     Duration? totalDuration,
@@ -417,7 +769,7 @@ class AudioPlayerState {
     double? volume,
   }) {
     return AudioPlayerState(
-      currentSong: currentSong ?? this.currentSong,
+      currentSong: clearCurrentSong ? null : (currentSong ?? this.currentSong),
       isPlaying: isPlaying ?? this.isPlaying,
       position: position ?? this.position,
       totalDuration: totalDuration ?? this.totalDuration,

@@ -7,6 +7,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:celsius/data/local_storage/hive_storage.dart';
+import 'package:celsius/domain/entities/app_settings.dart';
 import 'package:celsius/services/background_audio_service.dart';
 import 'package:celsius/services/widget_service.dart';
 import 'package:celsius/services/waveform_extractor_service.dart';
@@ -28,15 +29,24 @@ Future<void> main() async {
     DeviceOrientation.portraitDown,
   ]);
 
+  var initialSettings = const AppSettings();
   try {
     await Hive.initFlutter();
     await HiveStorage.init();
-    await WaveformExtractorService.instance.init();
+    initialSettings = HiveStorage.getSettings();
     markHiveInitSuccess();
   } catch (e) {
     // AppRoot renders the HiveErrorScreen when initialization fails.
     debugPrint('Hive init error: $e');
     reportHiveInitError(e);
+  }
+
+  // Waveforms are a rebuildable cache. A cache I/O failure must not prevent
+  // the core library/settings boxes or audio stack from starting.
+  try {
+    await WaveformExtractorService.instance.init();
+  } catch (e) {
+    debugPrint('Waveform cache init error: $e');
   }
 
   try {
@@ -52,10 +62,10 @@ Future<void> main() async {
     ),
   );
 
-  unawaited(_initAudioStack());
+  unawaited(_initAudioStack(initialSettings));
 }
 
-Future<void> _initAudioStack() async {
+Future<void> _initAudioStack(AppSettings initialSettings) async {
   if (Platform.isAndroid) {
     try {
       await Permission.notification.request();
@@ -67,7 +77,7 @@ Future<void> _initAudioStack() async {
   try {
     final settings = HiveStorage.getSettings();
     final handler = await AudioService.init(
-      builder: () => AudioPlayerHandler(),
+      builder: () => AudioPlayerHandler(initialSettings: initialSettings),
       config: AudioServiceConfig(
         androidNotificationChannelId: 'com.celsius.celsius.channel.audio',
         androidNotificationChannelName: 'Celsuis Playback',

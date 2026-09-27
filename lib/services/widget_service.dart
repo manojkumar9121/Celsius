@@ -56,12 +56,22 @@ class WidgetService {
   }
 
   void onSongChanged(SongEntity song, bool isPlaying) {
+    _lastTitle = song.title;
+    _lastArtist = song.artist;
+    _lastArtPath = song.coverArtPath;
     updateWidget(
       title: song.title,
       artist: song.artist,
       isPlaying: isPlaying,
       artPath: song.coverArtPath,
     );
+  }
+
+  void onSongCleared() {
+    _lastTitle = null;
+    _lastArtist = null;
+    _lastArtPath = null;
+    updateWidget(title: 'No song playing', artist: '', isPlaying: false);
   }
 
   void onPlayStateChanged(bool isPlaying) {
@@ -80,10 +90,4 @@ class WidgetService {
   String? _lastTitle;
   String? _lastArtist;
   String? _lastArtPath;
-
-  void trackSong(SongEntity song) {
-    _lastTitle = song.title;
-    _lastArtist = song.artist;
-    _lastArtPath = song.coverArtPath;
-  }
 }

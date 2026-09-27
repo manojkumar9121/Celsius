@@ -4,13 +4,15 @@ import 'package:celsius/data/local_storage/hive_storage.dart';
 import 'package:celsius/data/local_storage/playlist_box.dart';
 import 'package:uuid/uuid.dart';
 
-final playlistProvider = StateNotifierProvider<PlaylistNotifier, PlaylistState>((ref) {
-  return PlaylistNotifier();
-});
+final playlistProvider = StateNotifierProvider<PlaylistNotifier, PlaylistState>(
+  (ref) {
+    return PlaylistNotifier();
+  },
+);
 
 class PlaylistNotifier extends StateNotifier<PlaylistState> {
-  PlaylistNotifier() : super(const PlaylistState()) {
-    _loadPlaylists();
+  PlaylistNotifier({bool autoLoad = true}) : super(const PlaylistState()) {
+    if (autoLoad) _loadPlaylists();
   }
 
   Future<void> _loadPlaylists() async {
@@ -20,19 +22,31 @@ class PlaylistNotifier extends StateNotifier<PlaylistState> {
     );
   }
 
+  /// Re-reads playlists from storage. Called after song deletions, which
+  /// prune dead ids at the Hive layer, so state never holds stale references.
+  Future<void> reload() async {
+    if (!mounted) return;
+    final boxes = HiveStorage.getAllPlaylists();
+    state = state.copyWith(
+      playlists: boxes.map((box) => box.toEntity()).toList(),
+    );
+  }
+
   Future<void> createPlaylist(String name, {String? description}) async {
     final id = const Uuid().v4();
     final now = DateTime.now();
-    final playlist = PlaylistBox.fromEntity(PlaylistEntity(
-      id: id,
-      name: name,
-      description: description,
-      createdAt: now,
-      updatedAt: now,
-    ));
-    await HiveStorage.addPlaylist(playlist);
-    final updated = [...state.playlists, playlist.toEntity()];
-    state = state.copyWith(playlists: updated);
+    final playlist = PlaylistBox.fromEntity(
+      PlaylistEntity(
+        id: id,
+        name: name,
+        description: description,
+        createdAt: now,
+        updatedAt: now,
+      ),
+    );
+    final stored = await HiveStorage.addPlaylist(playlist);
+    if (stored == null) throw StateError('Playlist could not be stored');
+    state = state.copyWith(playlists: [...state.playlists, stored.toEntity()]);
   }
 
   Future<void> deletePlaylist(String id) async {
@@ -43,79 +57,70 @@ class PlaylistNotifier extends StateNotifier<PlaylistState> {
   }
 
   Future<void> renamePlaylist(String id, String newName) async {
-    final box = HiveStorage.getPlaylist(id);
-    if (box != null) {
-      box.name = newName;
-      box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-      await HiveStorage.updatePlaylist(box);
+    final stored = await HiveStorage.renamePlaylist(id, newName);
+    if (stored == null) {
+      await reload();
+      return;
     }
-    final updated = state.playlists.map((p) {
-      if (p.id == id) return p.copyWith(name: newName);
-      return p;
-    }).toList();
-    state = state.copyWith(playlists: updated);
+    _replacePlaylist(stored);
   }
 
   Future<void> addSongToPlaylist(String playlistId, String songId) async {
-    final box = HiveStorage.getPlaylist(playlistId);
-    if (box == null) return;
-    if (box.songIds.contains(songId)) return;
-    box.songIds.add(songId);
-    box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-    await HiveStorage.updatePlaylist(box);
-
-    final updated = state.playlists.map((p) {
-      if (p.id == playlistId) return p.copyWith(songIds: [...p.songIds, songId]);
-      return p;
-    }).toList();
-    state = state.copyWith(playlists: updated);
+    final stored = await HiveStorage.addSongToPlaylist(playlistId, songId);
+    if (stored == null) {
+      await reload();
+      throw StateError('Playlist or song no longer exists');
+    }
+    _replacePlaylist(stored);
   }
 
   Future<void> removeSongFromPlaylist(String playlistId, String songId) async {
-    final box = HiveStorage.getPlaylist(playlistId);
-    if (box != null) {
-      box.songIds.remove(songId);
-      box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-      await HiveStorage.updatePlaylist(box);
+    final stored = await HiveStorage.removeSongFromPlaylist(playlistId, songId);
+    if (stored == null) {
+      await reload();
+      return;
     }
-    final updated = state.playlists.map((p) {
-      if (p.id == playlistId) return p.copyWith(songIds: p.songIds.where((id) => id != songId).toList());
-      return p;
-    }).toList();
-    state = state.copyWith(playlists: updated);
+    _replacePlaylist(stored);
   }
 
-  Future<void> updatePlaylist(String playlistId, {String? name, List<String>? songIds}) async {
-    final box = HiveStorage.getPlaylist(playlistId);
-    if (box == null) return;
-    if (name != null) box.name = name;
-    if (songIds != null) {
-      box.songIds
-        ..clear()
-        ..addAll(songIds);
+  Future<void> reorderPlaylistSongs(
+    String playlistId,
+    List<String> orderedIds,
+  ) async {
+    final stored = await HiveStorage.reorderPlaylistSongs(
+      playlistId,
+      orderedIds,
+    );
+    if (stored == null) {
+      await reload();
+      return;
     }
-    box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-    await HiveStorage.updatePlaylist(box);
-
-    final updated = state.playlists.map((p) {
-      if (p.id == playlistId) return p.copyWith(name: name, songIds: songIds);
-      return p;
-    }).toList();
-    state = state.copyWith(playlists: updated);
+    _replacePlaylist(stored);
   }
 
   Future<void> updatePlaylistCover(String playlistId, String coverPath) async {
-    final box = HiveStorage.getPlaylist(playlistId);
-    if (box == null) return;
-    box.coverArtPath = coverPath;
-    box.timestampUpdated = DateTime.now().millisecondsSinceEpoch;
-    await HiveStorage.updatePlaylist(box);
+    final stored = await HiveStorage.setPlaylistCoverArt(playlistId, coverPath);
+    if (stored == null) {
+      await reload();
+      return;
+    }
+    _replacePlaylist(stored);
+  }
 
-    final updated = state.playlists.map((p) {
-      if (p.id == playlistId) return p.copyWith(coverArtPath: coverPath);
-      return p;
-    }).toList();
-    state = state.copyWith(playlists: updated);
+  void _replacePlaylist(PlaylistBox playlist) {
+    var replaced = false;
+    final playlists = [
+      for (final existing in state.playlists)
+        if (existing.id == playlist.id) playlist.toEntity() else existing,
+    ];
+    for (var i = 0; i < playlists.length; i++) {
+      if (playlists[i].id == playlist.id) {
+        replaced = true;
+        break;
+      }
+    }
+    if (!replaced) playlists.add(playlist.toEntity());
+    state = state.copyWith(playlists: playlists);
   }
 }
 

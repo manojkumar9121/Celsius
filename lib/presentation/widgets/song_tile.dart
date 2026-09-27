@@ -41,8 +41,20 @@ class SongTile extends ConsumerWidget {
         if (!context.mounted) return false;
         return await _showDeleteDialog(context);
       },
-      onDismissed: (direction) {
-        ref.read(libraryProvider.notifier).removeSong(song.id);
+      onDismissed: (direction) async {
+        final result = await ref
+            .read(libraryProvider.notifier)
+            .removeSong(song.id);
+        if (!context.mounted) return;
+        if (result.storageError != null) {
+          _showStorageError(context, 'remove song', result.storageError!);
+        } else if (result.hasCleanupFailures) {
+          _showStorageError(
+            context,
+            'finish song cleanup',
+            StateError('playlist or audio queue cleanup failed'),
+          );
+        }
       },
       child: _buildListTile(context, ref),
     );
@@ -51,7 +63,9 @@ class SongTile extends ConsumerWidget {
   Widget _buildListTile(BuildContext context, WidgetRef ref) {
     final title = song.title;
     final artist = song.artist;
-    final duration = song.durationMs > 0 ? _formatDuration(song.durationMs) : '';
+    final duration = song.durationMs > 0
+        ? _formatDuration(song.durationMs)
+        : '';
     final colorScheme = Theme.of(context).colorScheme;
     final isPlaying = this.isPlaying;
 
@@ -77,12 +91,14 @@ class SongTile extends ConsumerWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      trailing: trailing ?? Text(
-        duration.isNotEmpty ? duration : '',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: colorScheme.onSurface.withValues(alpha: 0.5),
-        ),
-      ),
+      trailing:
+          trailing ??
+          Text(
+            duration.isNotEmpty ? duration : '',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurface.withValues(alpha: 0.5),
+            ),
+          ),
       onTap: () async {
         await HapticFeedback.lightImpact();
         onTap();
@@ -108,13 +124,27 @@ class SongTile extends ConsumerWidget {
       ),
       child: Center(
         child: isPlaying
-            ? Icon(Icons.music_note, color: Theme.of(context).colorScheme.primary, size: 20)
-            : Icon(Icons.music_note, color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.4), size: 20),
+            ? Icon(
+                Icons.music_note,
+                color: Theme.of(context).colorScheme.primary,
+                size: 20,
+              )
+            : Icon(
+                Icons.music_note,
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurface.withValues(alpha: 0.4),
+                size: 20,
+              ),
       ),
     );
   }
 
-  Future<void> _showSongOptions(BuildContext context, WidgetRef ref, SongEntity song) async {
+  Future<void> _showSongOptions(
+    BuildContext context,
+    WidgetRef ref,
+    SongEntity song,
+  ) async {
     final playlistState = ref.read(playlistProvider);
 
     showModalBottomSheet(
@@ -124,27 +154,53 @@ class SongTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             ListTile(
-              leading: Icon(song.isFavorite ? Icons.favorite : Icons.favorite_border, color: song.isFavorite ? Theme.of(context).colorScheme.error : null),
+              leading: Icon(
+                song.isFavorite ? Icons.favorite : Icons.favorite_border,
+                color: song.isFavorite
+                    ? Theme.of(context).colorScheme.error
+                    : null,
+              ),
               title: const Text('Toggle Favorite'),
-              onTap: () {
-                ref.read(libraryProvider.notifier).toggleFavorite(song.id);
-                Navigator.pop(context);
+              onTap: () async {
+                try {
+                  await ref
+                      .read(libraryProvider.notifier)
+                      .toggleFavorite(song.id);
+                  if (context.mounted) Navigator.pop(context);
+                } catch (error) {
+                  if (context.mounted) {
+                    _showStorageError(context, 'update favorite', error);
+                  }
+                }
               },
             ),
             const Divider(height: 1),
-            ...playlistState.playlists.map((playlist) => ListTile(
-              leading: const Icon(Icons.playlist_add),
-              title: Text(playlist.name),
-              onTap: () {
-                ref.read(playlistProvider.notifier).addSongToPlaylist(playlist.id, song.id);
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Added to ${playlist.name}'), duration: const Duration(seconds: 1)),
-                  );
-                }
-              },
-            )),
+            ...playlistState.playlists.map(
+              (playlist) => ListTile(
+                leading: const Icon(Icons.playlist_add),
+                title: Text(playlist.name),
+                onTap: () async {
+                  try {
+                    await ref
+                        .read(playlistProvider.notifier)
+                        .addSongToPlaylist(playlist.id, song.id);
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Added to ${playlist.name}'),
+                          duration: const Duration(seconds: 1),
+                        ),
+                      );
+                    }
+                  } catch (error) {
+                    if (context.mounted) {
+                      _showStorageError(context, 'add to playlist', error);
+                    }
+                  }
+                },
+              ),
+            ),
             if (playlistState.playlists.isEmpty)
               ListTile(
                 leading: const Icon(Icons.info_outline),
@@ -166,6 +222,16 @@ class SongTile extends ConsumerWidget {
     );
   }
 
+  static void _showStorageError(
+    BuildContext context,
+    String action,
+    Object error,
+  ) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Could not $action: $error')));
+  }
+
   void _showSongInfo(BuildContext context, SongEntity song) {
     showDialog(
       context: context,
@@ -175,18 +241,26 @@ class SongTile extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Title: ${song.title}', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              'Title: ${song.title}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             Text('Artist: ${song.artist}'),
             Text('Album: ${song.album}'),
             Text('Duration: ${_formatDuration(song.durationMs)}'),
             Text('File: ${song.filePath}'),
-            Text('Added: ${song.dateAdded?.toString().split(' ').first ?? 'Unknown'}'),
+            Text(
+              'Added: ${song.dateAdded?.toString().split(' ').first ?? 'Unknown'}',
+            ),
             Text('Play count: ${song.playCount}'),
             Text('Favorite: ${song.isFavorite ? 'Yes' : 'No'}'),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
@@ -199,8 +273,14 @@ class SongTile extends ConsumerWidget {
         title: const Text('Remove Song'),
         content: const Text('Remove this song from the library?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove', style: TextStyle(color: Colors.red))),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Remove', style: TextStyle(color: Colors.red)),
+          ),
         ],
       ),
     );

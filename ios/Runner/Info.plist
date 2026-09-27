@@ -9,11 +9,11 @@
 		<string>audio</string>
 	</array>
 	<key>NSAppleMusicUsageDescription</key>
-	<string>Celsuis needs access to your music library to play your local audio files.</string>
+	<string>Celsius needs access to your music library to play your local audio files.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Celsuis</string>
+	<string>Celsius</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

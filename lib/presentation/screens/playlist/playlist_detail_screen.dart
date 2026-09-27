@@ -19,16 +19,21 @@ class PlaylistDetailScreen extends ConsumerStatefulWidget {
   const PlaylistDetailScreen({super.key, required this.playlistId});
 
   @override
-  ConsumerState<PlaylistDetailScreen> createState() => _PlaylistDetailScreenState();
+  ConsumerState<PlaylistDetailScreen> createState() =>
+      _PlaylistDetailScreenState();
 }
 
-class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> with SingleTickerProviderStateMixin {
+class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen>
+    with SingleTickerProviderStateMixin {
   late AnimationController _coverController;
 
   @override
   void initState() {
     super.initState();
-    _coverController = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _coverController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    );
   }
 
   @override
@@ -40,7 +45,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
   @override
   Widget build(BuildContext context) {
     final playlistState = ref.watch(playlistProvider);
-    final playlist = playlistState.playlists.where((pl) => pl.id == widget.playlistId).firstOrNull;
+    final playlist = playlistState.playlists
+        .where((pl) => pl.id == widget.playlistId)
+        .firstOrNull;
     final libraryState = ref.watch(libraryProvider);
     final allSongs = libraryState.songs;
     final currentSong = ref.watch(audioPlayerProvider).currentSong;
@@ -55,7 +62,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
       });
       return Scaffold(
         appBar: AppBar(title: const Text('Playlist')),
-        body: Center(child: Text('Playlist not found', style: textTheme.bodyLarge)),
+        body: Center(
+          child: Text('Playlist not found', style: textTheme.bodyLarge),
+        ),
       );
     }
 
@@ -64,7 +73,10 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
         .whereType<SongEntity>()
         .toList();
 
-    final hasCover = playlist.coverArtPath != null && playlist.coverArtPath!.isNotEmpty && File(playlist.coverArtPath!).existsSync();
+    final hasCover =
+        playlist.coverArtPath != null &&
+        playlist.coverArtPath!.isNotEmpty &&
+        File(playlist.coverArtPath!).existsSync();
 
     return Scaffold(
       appBar: AppBar(
@@ -76,11 +88,15 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
               onSelected: (value) async {
                 await HapticFeedback.lightImpact();
                 if (value == 'play_all') {
-                  ref.read(audioPlayerProvider.notifier).playSong(playlistSongs.first, playlistSongs);
+                  ref
+                      .read(audioPlayerProvider.notifier)
+                      .playSong(playlistSongs.first, playlistSongs);
                   if (context.mounted) context.push('/now-playing');
                 } else if (value == 'shuffle') {
                   final shuffled = [...playlistSongs]..shuffle();
-                  ref.read(audioPlayerProvider.notifier).playSong(shuffled.first, shuffled);
+                  ref
+                      .read(audioPlayerProvider.notifier)
+                      .playSong(shuffled.first, shuffled);
                   if (context.mounted) context.push('/now-playing');
                 } else if (value == 'rename') {
                   _showRenameDialog(playlist);
@@ -88,7 +104,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                   await _pickPlaylistCover(playlist.id);
                 } else if (value == 'delete') {
                   await HapticFeedback.mediumImpact();
-                  ref.read(playlistProvider.notifier).deletePlaylist(playlist.id);
+                  ref
+                      .read(playlistProvider.notifier)
+                      .deletePlaylist(playlist.id);
                   if (context.mounted) context.go('/library');
                 }
               },
@@ -96,10 +114,16 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                 const PopupMenuItem(value: 'play_all', child: Text('Play All')),
                 const PopupMenuItem(value: 'shuffle', child: Text('Shuffle')),
                 const PopupMenuItem(value: 'rename', child: Text('Rename')),
-                const PopupMenuItem(value: 'change_cover', child: Text('Change Cover')),
+                const PopupMenuItem(
+                  value: 'change_cover',
+                  child: Text('Change Cover'),
+                ),
                 PopupMenuItem(
                   value: 'delete',
-                  child: Text('Delete', style: TextStyle(color: colorScheme.error)),
+                  child: Text(
+                    'Delete',
+                    style: TextStyle(color: colorScheme.error),
+                  ),
                 ),
               ],
             ),
@@ -134,7 +158,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                             borderRadius: BorderRadius.circular(16),
                             boxShadow: [
                               BoxShadow(
-                                color: colorScheme.shadow.withValues(alpha: 0.3),
+                                color: colorScheme.shadow.withValues(
+                                  alpha: 0.3,
+                                ),
                                 blurRadius: 20,
                                 offset: const Offset(0, 8),
                               ),
@@ -142,7 +168,10 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                           ),
                           clipBehavior: Clip.antiAlias,
                           child: hasCover
-                              ? Image.file(File(playlist.coverArtPath!), fit: BoxFit.cover)
+                              ? Image.file(
+                                  File(playlist.coverArtPath!),
+                                  fit: BoxFit.cover,
+                                )
                               : Container(
                                   decoration: BoxDecoration(
                                     gradient: LinearGradient(
@@ -155,7 +184,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                                     ),
                                   ),
                                   child: Center(
-                                    child: Icon(Icons.queue_music, color: colorScheme.onPrimary, size: 56),
+                                    child: Icon(
+                                      Icons.queue_music,
+                                      color: colorScheme.onPrimary,
+                                      size: 56,
+                                    ),
                                   ),
                                 ),
                         ),
@@ -166,13 +199,17 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                 const SizedBox(height: 16),
                 Text(
                   playlist.name,
-                  style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '${playlistSongs.length} ${playlistSongs.length == 1 ? 'song' : 'songs'}',
-                  style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.5)),
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withValues(alpha: 0.5),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Row(
@@ -183,7 +220,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                           ? null
                           : () async {
                               await HapticFeedback.lightImpact();
-                              ref.read(audioPlayerProvider.notifier).playSong(playlistSongs.first, playlistSongs);
+                              ref
+                                  .read(audioPlayerProvider.notifier)
+                                  .playSong(playlistSongs.first, playlistSongs);
                               if (context.mounted) context.push('/now-playing');
                             },
                       icon: const Icon(Icons.play_arrow),
@@ -196,7 +235,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                           : () async {
                               await HapticFeedback.lightImpact();
                               final shuffled = [...playlistSongs]..shuffle();
-                              ref.read(audioPlayerProvider.notifier).playSong(shuffled.first, shuffled);
+                              ref
+                                  .read(audioPlayerProvider.notifier)
+                                  .playSong(shuffled.first, shuffled);
                               if (context.mounted) context.push('/now-playing');
                             },
                       icon: const Icon(Icons.shuffle),
@@ -214,16 +255,24 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.queue_music, size: 64, color: colorScheme.onSurface.withValues(alpha: 0.3)),
+                        Icon(
+                          Icons.queue_music,
+                          size: 64,
+                          color: colorScheme.onSurface.withValues(alpha: 0.3),
+                        ),
                         const SizedBox(height: 16),
                         Text(
                           'No songs yet',
-                          style: textTheme.titleMedium?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.6)),
+                          style: textTheme.titleMedium?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.6),
+                          ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Tap + to add songs from your library',
-                          style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.4)),
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurface.withValues(alpha: 0.4),
+                          ),
                         ),
                       ],
                     ),
@@ -240,13 +289,21 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                           .where((id) => allSongs.any((s) => s.id == id))
                           .toList();
                       if (oldIndex < 0 || oldIndex >= visibleIds.length) return;
-                      if (newIndex < 0 || newIndex > visibleIds.length) return;
+                      // Post-removal insertion semantics (same as the audio
+                      // queue): after removeAt the list holds N-1 items, so
+                      // newIndex == length would throw on insert — reject it.
+                      if (newIndex < 0 || newIndex >= visibleIds.length) return;
                       final item = visibleIds.removeAt(oldIndex);
                       visibleIds.insert(newIndex, item);
-                      final missingIds =
-                          playlist.songIds.where((id) => !visibleIds.contains(id)).toList();
-                      ref.read(playlistProvider.notifier)
-                          .updatePlaylist(playlist.id, songIds: [...visibleIds, ...missingIds]);
+                      try {
+                        await ref
+                            .read(playlistProvider.notifier)
+                            .reorderPlaylistSongs(playlist.id, visibleIds);
+                      } catch (error) {
+                        if (mounted) {
+                          _showCoverError('Could not reorder playlist.');
+                        }
+                      }
                     },
                     itemBuilder: (context, index) {
                       final song = playlistSongs[index];
@@ -262,7 +319,9 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
                         ),
                         onTap: () async {
                           await HapticFeedback.lightImpact();
-                          ref.read(audioPlayerProvider.notifier).playSong(song, playlistSongs);
+                          ref
+                              .read(audioPlayerProvider.notifier)
+                              .playSong(song, playlistSongs);
                           if (context.mounted) context.push('/now-playing');
                         },
                       );
@@ -285,10 +344,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _AddSongsSheet(
-        playlistId: playlistId,
-        initialSongs: currentSongs,
-      ),
+      builder: (ctx) =>
+          _AddSongsSheet(playlistId: playlistId, initialSongs: currentSongs),
     );
   }
 
@@ -313,12 +370,21 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
             child: const Text('Cancel'),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               if (controller.text.trim().isNotEmpty) {
-                ref.read(playlistProvider.notifier).renamePlaylist(playlist.id, controller.text.trim());
-                Navigator.pop(ctx);
+                try {
+                  await ref
+                      .read(playlistProvider.notifier)
+                      .renamePlaylist(playlist.id, controller.text.trim());
+                  if (ctx.mounted) Navigator.pop(ctx);
+                } catch (error) {
+                  if (ctx.mounted) {
+                    _showCoverError('Could not rename playlist.');
+                  }
+                }
               }
             },
+
             child: const Text('Rename'),
           ),
         ],
@@ -327,19 +393,49 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> wit
   }
 
   Future<void> _pickPlaylistCover(String playlistId) async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      // withData lets us handle providers (SAF/cloud) that yield no
+      // filesystem path — otherwise `path` is null and `!` would throw.
+      withData: true,
+    );
     if (result == null || result.files.isEmpty) return;
 
-    final file = File(result.files.first.path!);
-    final appDir = await getApplicationDocumentsDirectory();
-    final coversDir = Directory('${appDir.path}/playlist_covers');
-    if (!await coversDir.exists()) await coversDir.create(recursive: true);
+    final picked = result.files.first;
+    try {
+      final appDir = await getApplicationDocumentsDirectory();
+      final coversDir = Directory('${appDir.path}/playlist_covers');
+      if (!await coversDir.exists()) await coversDir.create(recursive: true);
 
-    final ext = p.extension(result.files.first.name);
-    final destPath = '${coversDir.path}/$playlistId$ext';
-    await file.copy(destPath);
+      final ext = p.extension(picked.name);
+      final destPath = '${coversDir.path}/$playlistId$ext';
 
-    ref.read(playlistProvider.notifier).updatePlaylistCover(playlistId, destPath);
+      final sourcePath = picked.path;
+      if (sourcePath != null && sourcePath.isNotEmpty) {
+        await File(sourcePath).copy(destPath);
+      } else if (picked.bytes != null && picked.bytes!.isNotEmpty) {
+        await File(destPath).writeAsBytes(picked.bytes!);
+      } else {
+        if (mounted) {
+          _showCoverError('Could not read that image. Try another file.');
+        }
+        return;
+      }
+
+      await ref
+          .read(playlistProvider.notifier)
+          .updatePlaylistCover(playlistId, destPath);
+    } catch (e) {
+      debugPrint('Playlist cover pick failed: $e');
+      if (mounted) _showCoverError('Could not set cover. Try another file.');
+    }
+  }
+
+  void _showCoverError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 2)),
+    );
   }
 }
 
@@ -347,10 +443,7 @@ class _AddSongsSheet extends ConsumerStatefulWidget {
   final String playlistId;
   final List<SongEntity> initialSongs;
 
-  const _AddSongsSheet({
-    required this.playlistId,
-    required this.initialSongs,
-  });
+  const _AddSongsSheet({required this.playlistId, required this.initialSongs});
 
   @override
   ConsumerState<_AddSongsSheet> createState() => _AddSongsSheetState();
@@ -369,7 +462,9 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
   Widget build(BuildContext context) {
     final allSongs = ref.watch(libraryProvider).songs;
     final currentIds = _selectedSongs.map((s) => s.id).toSet();
-    final available = allSongs.where((s) => !currentIds.contains(s.id)).toList();
+    final available = allSongs
+        .where((s) => !currentIds.contains(s.id))
+        .toList();
 
     return DraggableScrollableSheet(
       initialChildSize: 0.7,
@@ -385,7 +480,9 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
               children: [
                 Text(
                   'Add Songs (${_selectedSongs.length} in playlist)',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 IconButton(
                   onPressed: () => Navigator.pop(ctx),
@@ -413,18 +510,40 @@ class _AddSongsSheetState extends ConsumerState<_AddSongsSheet> {
                       width: 40,
                       height: 40,
                       borderRadius: 6,
-                      placeholderBuilder: (_, w, h) => _placeholder(context, w, h),
+                      placeholderBuilder: (_, w, h) =>
+                          _placeholder(context, w, h),
                     ),
-                    title: Text(song.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle: Text(song.artist, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    title: Text(
+                      song.title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    subtitle: Text(
+                      song.artist,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                     trailing: IconButton(
                       icon: const Icon(Icons.add_circle_outline),
                       onPressed: () async {
                         await HapticFeedback.lightImpact();
-                        ref.read(playlistProvider.notifier).addSongToPlaylist(widget.playlistId, song.id);
-                        setState(() {
-                          _selectedSongs = [..._selectedSongs, song];
-                        });
+                        try {
+                          await ref
+                              .read(playlistProvider.notifier)
+                              .addSongToPlaylist(widget.playlistId, song.id);
+                          if (!mounted) return;
+                          setState(() {
+                            _selectedSongs = [..._selectedSongs, song];
+                          });
+                        } catch (error) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Could not add song.'),
+                              ),
+                            );
+                          }
+                        }
                       },
                     ),
                   );

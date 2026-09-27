@@ -39,18 +39,26 @@ class SongActionsMenu extends ConsumerWidget {
           value: 'favorite',
           child: _MenuItem(
             icon: song.isFavorite ? Icons.favorite : Icons.favorite_border,
-            label: song.isFavorite ? 'Remove from Favorites' : 'Add to Favorites',
+            label: song.isFavorite
+                ? 'Remove from Favorites'
+                : 'Add to Favorites',
             color: song.isFavorite ? Theme.of(ctx).colorScheme.error : null,
           ),
         ),
         const PopupMenuItem(
           value: 'add_playlist',
-          child: _MenuItem(icon: Icons.playlist_add, label: 'Add to Playlist...'),
+          child: _MenuItem(
+            icon: Icons.playlist_add,
+            label: 'Add to Playlist...',
+          ),
         ),
         if (inPlaylist)
           const PopupMenuItem(
             value: 'move_playlist',
-            child: _MenuItem(icon: Icons.drive_file_move_outline, label: 'Move to Playlist...'),
+            child: _MenuItem(
+              icon: Icons.drive_file_move_outline,
+              label: 'Move to Playlist...',
+            ),
           ),
         if (inPlaylist)
           PopupMenuItem(
@@ -78,20 +86,50 @@ class SongActionsMenu extends ConsumerWidget {
     );
   }
 
-  Future<void> _onSelected(BuildContext context, WidgetRef ref, String value) async {
+  Future<void> _onSelected(
+    BuildContext context,
+    WidgetRef ref,
+    String value,
+  ) async {
     await HapticFeedback.lightImpact();
     if (!context.mounted) return;
     switch (value) {
       case 'play_next':
-        await ref.read(audioPlayerProvider.notifier).addToQueue(song, playNext: true);
-        if (context.mounted) _showSnack(context, 'Added next in queue');
+        try {
+          final result = await ref
+              .read(audioPlayerProvider.notifier)
+              .addToQueue(song, playNext: true);
+          if (context.mounted) {
+            _showSnack(context, _queueAddMessage(result, playNext: true));
+          }
+        } catch (error) {
+          if (context.mounted) {
+            _showSnack(context, 'Could not add to queue: $error');
+          }
+        }
         break;
       case 'add_queue':
-        await ref.read(audioPlayerProvider.notifier).addToQueue(song);
-        if (context.mounted) _showSnack(context, 'Added to queue');
+        try {
+          final result = await ref
+              .read(audioPlayerProvider.notifier)
+              .addToQueue(song);
+          if (context.mounted) {
+            _showSnack(context, _queueAddMessage(result));
+          }
+        } catch (error) {
+          if (context.mounted) {
+            _showSnack(context, 'Could not add to queue: $error');
+          }
+        }
         break;
       case 'favorite':
-        ref.read(libraryProvider.notifier).toggleFavorite(song.id);
+        try {
+          await ref.read(libraryProvider.notifier).toggleFavorite(song.id);
+        } catch (error) {
+          if (context.mounted) {
+            _showSnack(context, 'Could not update favorite: $error');
+          }
+        }
         break;
       case 'add_playlist':
         await _pickPlaylist(context, ref, move: false);
@@ -111,7 +149,11 @@ class SongActionsMenu extends ConsumerWidget {
     }
   }
 
-  Future<void> _pickPlaylist(BuildContext context, WidgetRef ref, {required bool move}) async {
+  Future<void> _pickPlaylist(
+    BuildContext context,
+    WidgetRef ref, {
+    required bool move,
+  }) async {
     final playlists = ref
         .read(playlistProvider)
         .playlists
@@ -134,14 +176,22 @@ class SongActionsMenu extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
                 move ? 'Move to Playlist' : 'Add to Playlist',
-                style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: Theme.of(
+                  ctx,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
             ),
-            ...playlists.map((p) => ListTile(
-              leading: const Icon(Icons.playlist_play),
-              title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-              onTap: () => Navigator.pop(ctx, p),
-            )),
+            ...playlists.map(
+              (p) => ListTile(
+                leading: const Icon(Icons.playlist_play),
+                title: Text(
+                  p.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                onTap: () => Navigator.pop(ctx, p),
+              ),
+            ),
           ],
         ),
       ),
@@ -149,16 +199,28 @@ class SongActionsMenu extends ConsumerWidget {
     if (target == null || !context.mounted) return;
 
     final notifier = ref.read(playlistProvider.notifier);
-    await notifier.addSongToPlaylist(target.id, song.id);
-    if (move && playlistId != null) {
-      await notifier.removeSongFromPlaylist(playlistId!, song.id);
-    }
-    if (context.mounted) {
-      _showSnack(context, move ? 'Moved to ${target.name}' : 'Added to ${target.name}');
+    try {
+      await notifier.addSongToPlaylist(target.id, song.id);
+      if (move && playlistId != null) {
+        await notifier.removeSongFromPlaylist(playlistId!, song.id);
+      }
+      if (context.mounted) {
+        _showSnack(
+          context,
+          move ? 'Moved to ${target.name}' : 'Added to ${target.name}',
+        );
+      }
+    } catch (error) {
+      if (context.mounted) {
+        _showSnack(context, 'Could not update playlist: $error');
+      }
     }
   }
 
-  Future<void> _confirmRemoveFromPlaylist(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmRemoveFromPlaylist(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     if (playlistId == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -166,33 +228,64 @@ class SongActionsMenu extends ConsumerWidget {
         title: const Text('Remove song?'),
         content: Text('Remove "${song.title}" from this playlist?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Remove'),
+          ),
         ],
       ),
     );
     if (confirmed == true) {
-      await ref.read(playlistProvider.notifier).removeSongFromPlaylist(playlistId!, song.id);
+      try {
+        await ref
+            .read(playlistProvider.notifier)
+            .removeSongFromPlaylist(playlistId!, song.id);
+      } catch (error) {
+        if (context.mounted) {
+          _showSnack(context, 'Could not remove song from playlist: $error');
+        }
+      }
     }
   }
 
-  Future<void> _confirmRemoveFromLibrary(BuildContext context, WidgetRef ref) async {
+  Future<void> _confirmRemoveFromLibrary(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Remove Song'),
         content: Text('Remove "${song.title}" from your library?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: Text('Remove', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+            child: Text(
+              'Remove',
+              style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+            ),
           ),
         ],
       ),
     );
     if (confirmed == true) {
-      ref.read(libraryProvider.notifier).removeSong(song.id);
+      final result = await ref
+          .read(libraryProvider.notifier)
+          .removeSong(song.id);
+      if (!context.mounted) return;
+      if (result.storageError != null) {
+        _showSnack(context, 'Could not remove song: ${result.storageError}');
+      } else if (result.hasCleanupFailures) {
+        _showSnack(context, 'Song removed, but dependent cleanup failed');
+      }
     }
   }
 
@@ -205,19 +298,39 @@ class SongActionsMenu extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Title: ${song.title}', style: const TextStyle(fontWeight: FontWeight.w600)),
+            Text(
+              'Title: ${song.title}',
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
             Text('Artist: ${song.artist}'),
             Text('Album: ${song.album}'),
             Text('Duration: ${_formatDuration(song.durationMs)}'),
             Text('File: ${song.filePath}'),
-            Text('Added: ${song.dateAdded?.toString().split(' ').first ?? 'Unknown'}'),
+            Text(
+              'Added: ${song.dateAdded?.toString().split(' ').first ?? 'Unknown'}',
+            ),
             Text('Play count: ${song.playCount}'),
             Text('Favorite: ${song.isFavorite ? 'Yes' : 'No'}'),
           ],
         ),
-        actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close'))],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
+  }
+
+  String _queueAddMessage(QueueAddResult result, {bool playNext = false}) {
+    return switch (result) {
+      QueueAddResult.added =>
+        playNext ? 'Added next in queue' : 'Added to queue',
+      QueueAddResult.alreadyQueued => 'Already in queue',
+      QueueAddResult.playerUnavailable =>
+        'Player not ready — try again in a moment',
+    };
   }
 
   void _showSnack(BuildContext context, String message) {
